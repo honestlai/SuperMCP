@@ -327,6 +327,17 @@ docker inspect --format='{{.State.Health.Status}}' 3AmigosMCP
 * **Why**: Form fields need to be focused before text input can be reliably entered
 * **Note**: This is a known requirement for reliable form field interaction with Playwright MCP
 
+#### Material-UI TextField Components Not Working
+
+* **Issue**: Cannot type into Material-UI TextField components even after clicking
+* **Root Cause**: Material-UI TextFields have a complex nested DOM structure where the actual `<input>` element is nested inside multiple wrapper divs. Playwright MCP uses the accessibility tree to interact with elements, which may point to the wrapper div instead of the actual input element.
+* **Status**: **Known Limitation** - This is a fundamental incompatibility between Playwright MCP's accessibility tree approach and Material-UI's component structure.
+* **Workarounds**:
+  * **Option 1 (Recommended)**: Replace Material-UI TextField components with standard HTML `<input>` elements or simpler form libraries
+  * **Option 2**: Use native HTML inputs wrapped in Material-UI styling instead of TextField components
+  * **Option 3**: Wait for Playwright MCP to add support for nested input elements in complex component libraries
+* **Why This Happens**: The accessibility tree identifies the TextField wrapper as the interactive element, but the actual input handling requires interaction with the nested `<input>` element, which the MCP cannot reliably locate.
+
 ## 📈 Performance
 
 ### Resource Usage

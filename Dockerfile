@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/playwright:v1.40.0-focal
+FROM mcr.microsoft.com/playwright:v1.48.0-focal
 
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
