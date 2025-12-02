@@ -89,7 +89,6 @@ docker compose up -d
         "3AmigosMCP",
         "npx",
         "@playwright/mcp@latest",
-        "--headless",
         "--isolated",
         "--no-sandbox",
         "--browser",
@@ -313,6 +312,14 @@ docker inspect --format='{{.State.Health.Status}}' 3AmigosMCP
 * **Verify**: Container is healthy and running
 * **Test**: Run `./test-mcps.sh` to verify all MCPs
 
+#### Browser Not Visible / Headless Mode
+
+* **Issue**: Browser actions happen invisibly
+* **Solution**: The `--headless` flag has been removed from the default configuration to show browser actions
+* **To Show Browser**: The configuration now runs Playwright in "headed" mode (visible browser) by default
+* **To Hide Browser**: Add `--headless` back to the Playwright MCP args in `cursor-mcp-config.json` if you want to hide the browser window
+* **Note**: When running in Docker, browser visibility depends on your display configuration. Cursor's browser MCP integration may handle display differently.
+
 #### Form Field Input Not Working
 
 * **Issue**: `browser_type` fails with "Element not found" error
@@ -348,7 +355,7 @@ docker inspect --format='{{.State.Health.Status}}' 3AmigosMCP
 
 ### Optimization Tips
 
-* Use `--headless` mode for Playwright automation
+* Use `--headless` mode for Playwright automation (removed by default to show browser actions)
 * Enable `--isolated` for clean browser sessions
 * Monitor resource usage with `docker stats`
 

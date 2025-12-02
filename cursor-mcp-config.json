@@ -8,7 +8,6 @@
         "3AmigosMCP",
         "npx",
         "@playwright/mcp@latest",
-        "--headless",
         "--isolated",
         "--no-sandbox",
         "--browser",
