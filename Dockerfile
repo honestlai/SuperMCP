@@ -16,24 +16,14 @@ RUN apt-get update && apt-get install -y \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Google Chrome
-RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - \
-    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
-    && apt-get update \
-    && apt-get install -y google-chrome-stable \
-    && rm -rf /var/lib/apt/lists/*
-
 # Install MCP servers
 RUN npm install -g @playwright/mcp@latest \
     @modelcontextprotocol/server-filesystem@latest \
     @ahmetbarut/mcp-database-server@latest
 
-# Install Playwright browsers (Chromium, Firefox, WebKit)
-# Chrome is already installed above and will be used via channel option
-RUN npx playwright install --with-deps
-
-# Set environment variable to help Playwright find Chrome
-ENV PLAYWRIGHT_CHROME_CHANNEL=chrome
+# Install Playwright browsers (Chromium only for headless mode)
+# Chromium comes bundled with Playwright and is optimized for headless automation
+RUN npx playwright install chromium --with-deps
 
 # Create workspace directory with proper permissions
 RUN mkdir -p /workspace /data && \
