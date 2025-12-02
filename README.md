@@ -89,6 +89,7 @@ docker compose up -d
         "3AmigosMCP",
         "npx",
         "@playwright/mcp@latest",
+        "--headless",
         "--isolated",
         "--no-sandbox",
         "--browser",
@@ -312,32 +313,6 @@ docker inspect --format='{{.State.Health.Status}}' 3AmigosMCP
 * **Verify**: Container is healthy and running
 * **Test**: Run `./test-mcps.sh` to verify all MCPs
 
-#### Browser Not Visible / Headless Mode
-
-* **Issue**: Browser actions happen invisibly - no browser window appears in Cursor
-* **Root Cause**: 
-  - Docker containers don't have access to the host display by default
-  - X11 forwarding is required to show GUI applications from Docker
-  - Cursor's built-in browser MCP tools may use a different display mechanism
-* **Solution**: 
-  1. **X11 Forwarding Setup** (for Docker):
-     ```bash
-     # Allow Docker to access X11
-     xhost +local:docker
-     
-     # Restart container
-     docker compose restart
-     ```
-  2. **Docker Configuration**: The `docker-compose.yml` now includes:
-     - `DISPLAY` environment variable
-     - X11 socket volume mount (`/tmp/.X11-unix`)
-  3. **Playwright MCP Configuration**: `--headless` flag has been removed
-* **Important Notes**:
-  - **Cursor's Browser Tools**: When using Cursor's built-in browser MCP (`cursor-ide-browser`), the browser may not show a separate window - it's integrated into Cursor's interface
-  - **Playwright MCP**: To see Playwright MCP's browser window, you need X11 forwarding configured
-  - **Display Access**: If `xhost` command is not available, you may need to install `x11-xserver-utils` or configure X11 differently for your system
-* **To Hide Browser**: Add `--headless` back to the Playwright MCP args in `cursor-mcp-config.json`
-
 #### Form Field Input Not Working
 
 * **Issue**: `browser_type` fails with "Element not found" error
@@ -373,7 +348,7 @@ docker inspect --format='{{.State.Health.Status}}' 3AmigosMCP
 
 ### Optimization Tips
 
-* Use `--headless` mode for Playwright automation (removed by default to show browser actions)
+* Use `--headless` mode for Playwright automation
 * Enable `--isolated` for clean browser sessions
 * Monitor resource usage with `docker stats`
 

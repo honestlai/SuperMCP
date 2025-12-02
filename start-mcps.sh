@@ -31,7 +31,7 @@ start_mcp_server() {
 }
 
 # Start Playwright MCP server on port 8081
-start_mcp_server "Playwright" "npx @playwright/mcp@latest --isolated --no-sandbox --browser chrome --port 8081" 8081
+start_mcp_server "Playwright" "npx @playwright/mcp@latest --headless --isolated --no-sandbox --browser chrome --port 8081" 8081
 
 # Start simple HTTP server for Filesystem MCP on port 8082
 start_mcp_server "Filesystem-HTTP" "node /filesystem-server.js" 8082
