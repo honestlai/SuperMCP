@@ -9,9 +9,11 @@ services:
     volumes:
       - /workspace:/workspace:rw
       - data:/data:rw
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
     environment:
       - PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
       - PLAYWRIGHT_CHROME_CHANNEL=chrome
+      - DISPLAY=${DISPLAY:-:0}
     restart: unless-stopped
     networks:
       - Network-Bridge
