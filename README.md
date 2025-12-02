@@ -177,11 +177,19 @@ await browser.take_screenshot({
   fullPage: true 
 });
 
-// Fill a form
+// Fill a form field (IMPORTANT: Click the field first before typing)
+await browser.click({ 
+  element: "Username textbox", 
+  ref: "ref-username-field" 
+});
 await browser.type({ 
-  element: "input[name='username']", 
+  element: "Username textbox", 
+  ref: "ref-username-field",
   text: "myuser" 
 });
+
+// Note: For form inputs, you must click the field first to focus it before typing.
+// This is a known requirement for reliable form field interaction.
 ```
 
 ### File Operations with Filesystem
@@ -304,6 +312,20 @@ docker inspect --format='{{.State.Health.Status}}' 3AmigosMCP
 * **Check**: Client configuration
 * **Verify**: Container is healthy and running
 * **Test**: Run `./test-mcps.sh` to verify all MCPs
+
+#### Form Field Input Not Working
+
+* **Issue**: `browser_type` fails with "Element not found" error
+* **Solution**: **Click the form field first** before typing to focus it
+* **Example**:
+  ```javascript
+  // Step 1: Click to focus the field
+  await browser.click({ element: "Username field", ref: "ref-username" });
+  // Step 2: Then type
+  await browser.type({ element: "Username field", ref: "ref-username", text: "admin" });
+  ```
+* **Why**: Form fields need to be focused before text input can be reliably entered
+* **Note**: This is a known requirement for reliable form field interaction with Playwright MCP
 
 ## 📈 Performance
 
