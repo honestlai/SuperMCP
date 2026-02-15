@@ -33,26 +33,53 @@ for (const [name, config] of Object.entries(MCP_REGISTRY)) {
 const activeNames = Object.keys(activeMcps);
 console.log(`Active MCP servers: ${activeNames.join(', ') || 'none'}`);
 
+// ── API key authentication ───────────────────────────────────────────────────
+// Set GATEWAY_API_KEY to require Bearer token auth on all MCP endpoints.
+// If not set, the gateway runs open (no auth).
+const API_KEY = process.env.GATEWAY_API_KEY || '';
+if (API_KEY) {
+  console.log('API key authentication: ENABLED');
+} else {
+  console.log('API key authentication: disabled (set GATEWAY_API_KEY to enable)');
+}
+
 // ── CORS middleware ──────────────────────────────────────────────────────────
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept, Mcp-Session-Id, Last-Event-ID');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept, Authorization, Mcp-Session-Id, Last-Event-ID');
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
   }
   next();
 });
 
-// ── Health endpoint ──────────────────────────────────────────────────────────
+// ── Health endpoint (always open, used by Docker healthcheck) ────────────────
 app.get('/health', (req, res) => {
   res.json({
     status: 'healthy',
     service: 'MCP Gateway',
+    auth: API_KEY ? 'enabled' : 'disabled',
     activeMcps: activeNames,
     endpoints: activeNames.map(name => `/${name}`),
   });
 });
+
+// ── Bearer token auth middleware ─────────────────────────────────────────────
+// Applied to everything AFTER /health so Docker healthchecks don't need a token.
+if (API_KEY) {
+  app.use((req, res, next) => {
+    const authHeader = req.headers['authorization'] || '';
+    const match = authHeader.match(/^Bearer\s+(.+)$/i);
+    if (!match || match[1] !== API_KEY) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Valid Bearer token required. Set the Authorization header: Bearer <your-api-key>',
+      });
+    }
+    next();
+  });
+}
 
 // ── Index page ───────────────────────────────────────────────────────────────
 app.get('/', (req, res) => {

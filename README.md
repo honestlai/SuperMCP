@@ -168,6 +168,38 @@ Replace `localhost` with your server's IP address if you're connecting remotely.
 
 ## Configuration Reference
 
+### API key authentication
+
+If you're exposing the gateway to a network (especially the internet), you should protect it with an API key. Set `GATEWAY_API_KEY` in your `docker-compose.yml`:
+
+```yaml
+environment:
+  - GATEWAY_API_KEY=my-secret-key-here
+```
+
+When set, every request to an MCP endpoint must include a Bearer token:
+
+```
+Authorization: Bearer my-secret-key-here
+```
+
+In your Cursor / VS Code MCP config, add a `headers` block to each server:
+
+```json
+{
+  "mcpServers": {
+    "Playwright_MCP": {
+      "url": "http://your-server:8080/playwright",
+      "headers": {
+        "Authorization": "Bearer my-secret-key-here"
+      }
+    }
+  }
+}
+```
+
+Requests without a valid token receive a `401 Unauthorized` response. The `/health` endpoint remains open so Docker healthchecks continue to work. If `GATEWAY_API_KEY` is not set, the gateway runs open with no authentication (fine for local-only use).
+
 ### Enabling servers
 
 Every server is controlled by a single environment variable. Some servers need additional configuration (API keys, URLs). Set these in the `environment` section of your `docker-compose.yml`:

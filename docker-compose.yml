@@ -11,6 +11,12 @@ services:
       - PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
       - PLAYWRIGHT_CHROME_CHANNEL=chrome
       - PLAYWRIGHT_HEADLESS=true
+      # ─── API key authentication (optional) ───
+      # Set a key here to require Bearer token auth on all MCP endpoints.
+      # Clients must send: Authorization: Bearer <your-key>
+      # If not set, the gateway runs open with no auth.
+      # - GATEWAY_API_KEY=your_secret_key_here
+      #
       # ─── Enable MCP servers (all disabled by default) ───
       # Uncomment the lines below to enable individual MCP servers.
       # Access enabled servers at: http://<server>:8080/<name>
