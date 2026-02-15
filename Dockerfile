@@ -1,32 +1,20 @@
-FROM mcr.microsoft.com/playwright:v1.40.0-focal
+FROM mcr.microsoft.com/playwright:v1.50.0-noble
 
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
     PLAYWRIGHT_CHROME_CHANNEL=chrome
 
-# Install system dependencies, Node.js, Python 3.11, ffmpeg, and Google Chrome
+# Install base system dependencies + Python extras
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    wget \
-    git \
-    sqlite3 \
-    gnupg \
-    ca-certificates \
-    software-properties-common \
-    ffmpeg \
-    && add-apt-repository ppa:deadsnakes/ppa \
-    && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
-    && wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - \
-    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
-    && apt-get update \
-    && apt-get install -y nodejs google-chrome-stable \
-       python3.11 python3.11-venv python3.11-distutils \
-    && curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11 \
+    curl wget git sqlite3 gnupg ca-certificates \
+    software-properties-common ffmpeg \
+    python3-pip python3-venv \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python packages for MCP servers
-RUN python3.11 -m pip install --no-cache-dir mcp openai yt-dlp mcp-server-fetch mcp-server-git
+RUN python3 -m pip install --no-cache-dir --break-system-packages \
+    mcp openai yt-dlp mcp-server-fetch mcp-server-git
 
 # Install all MCP server packages globally
 # These are installed at build time but only start when enabled via environment variables

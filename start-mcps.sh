@@ -102,13 +102,15 @@ if [ "${ENABLE_PYTHON_INTERPRETER}" = "true" ]; then
     STARTED=$((STARTED + 1))
 fi
 
-# ── YouTube Transcriber MCP (requires FIREWORKS_API_KEY) ─────────────────────
+# ── YouTube Transcriber MCP (requires an API key for a Whisper-compatible provider)
 if [ "${ENABLE_YOUTUBE_TRANSCRIBER}" = "true" ]; then
-    if [ -z "${FIREWORKS_API_KEY}" ]; then
-        echo "[!] WARNING: ENABLE_YOUTUBE_TRANSCRIBER=true but FIREWORKS_API_KEY is not set. Skipping."
+    if [ -z "${TRANSCRIBER_API_KEY}" ] && [ -z "${FIREWORKS_API_KEY}" ]; then
+        echo "[!] WARNING: ENABLE_YOUTUBE_TRANSCRIBER=true but no API key is set."
+        echo "    Set TRANSCRIBER_API_KEY (and optionally TRANSCRIBER_PROVIDER) or legacy FIREWORKS_API_KEY."
+        echo "    Skipping."
     else
         start_mcp "youtube-transcriber" 8089 \
-            "python3.11 /app/youtube_transcriber.py"
+            "python3 /app/youtube_transcriber.py"
         STARTED=$((STARTED + 1))
     fi
 fi
@@ -116,14 +118,14 @@ fi
 # ── Fetch MCP ────────────────────────────────────────────────────────────────
 if [ "${ENABLE_FETCH}" = "true" ]; then
     start_mcp "fetch" 8090 \
-        "python3.11 -m mcp_server_fetch"
+        "python3 -m mcp_server_fetch"
     STARTED=$((STARTED + 1))
 fi
 
 # ── Git MCP ──────────────────────────────────────────────────────────────────
 if [ "${ENABLE_GIT}" = "true" ]; then
     start_mcp "git" 8091 \
-        "python3.11 -m mcp_server_git --repository /workspace"
+        "python3 -m mcp_server_git --repository /workspace"
     STARTED=$((STARTED + 1))
 fi
 

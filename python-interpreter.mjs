@@ -14,7 +14,7 @@ server.tool(
   { code: z.string().describe('Python code to execute') },
   async ({ code }) => {
     try {
-      const result = execSync('python3.11 -', {
+      const result = execSync('python3 -', {
         input: code,
         timeout: 30000,
         encoding: 'utf-8',

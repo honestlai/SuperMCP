@@ -39,7 +39,7 @@ The result is a single Docker image that pre-installs all eleven MCP servers at 
 | **SearXNG** | `/searxng` | Privacy-respecting web search through your own SearXNG instance |
 | **Context7** | `/context7` | Pulls up-to-date documentation for libraries and frameworks, so your agent isn't working from stale training data |
 | **Python Interpreter** | `/python-interpreter` | Executes Python 3 code directly inside the container and returns the output |
-| **YouTube Transcriber** | `/youtube-transcriber` | Downloads YouTube audio and transcribes it using Fireworks AI's Whisper API |
+| **YouTube Transcriber** | `/youtube-transcriber` | Downloads YouTube audio and transcribes it using any Whisper-compatible API (OpenAI, Groq, Fireworks, or custom) |
 | **Fetch** | `/fetch` | Fetches any URL and returns the content as clean markdown -- great for reading docs, calling APIs, checking live pages |
 | **Git** | `/git` | Local git operations on your `/workspace` repo -- status, diff, commit, branch, log, checkout, and more |
 
@@ -214,7 +214,7 @@ Every server is controlled by a single environment variable. Some servers need a
 | SearXNG | `ENABLE_SEARXNG=true` | `SEARXNG_SERVER_URL` (required, e.g. `http://searxng:8080`) |
 | Context7 | `ENABLE_CONTEXT7=true` | `CONTEXT7_API_KEY` (optional, for higher rate limits) |
 | Python Interpreter | `ENABLE_PYTHON_INTERPRETER=true` | -- |
-| YouTube Transcriber | `ENABLE_YOUTUBE_TRANSCRIBER=true` | `FIREWORKS_API_KEY` (required) |
+| YouTube Transcriber | `ENABLE_YOUTUBE_TRANSCRIBER=true` | `TRANSCRIBER_API_KEY` + `TRANSCRIBER_PROVIDER` (see [YouTube Transcriber config](#youtube-transcriber-configuration)) |
 | Fetch | `ENABLE_FETCH=true` | -- |
 | Git | `ENABLE_GIT=true` | -- |
 
@@ -223,6 +223,75 @@ If you enable a server that requires an API key but don't provide one, the start
 **Note on SearXNG:** The `docker-compose.yml` includes a bundled SearXNG instance as a second service. It starts automatically alongside the gateway on the same Docker network. When you enable SearXNG, set `SEARXNG_SERVER_URL=http://searxng:8080` and it will connect to the bundled instance. If you already run your own SearXNG elsewhere, point the URL there instead and remove the `searxng` service from the compose file.
 
 **Note on Context7:** Context7 works without an API key, but with lower rate limits. The MCP server runs locally but connects to Context7's hosted backend for documentation data. You can get a free API key at [context7.com](https://context7.com) for higher rate limits -- the backend itself is not self-hostable.
+
+### YouTube Transcriber configuration
+
+The YouTube Transcriber downloads audio from a YouTube URL with `yt-dlp` and transcribes it using a Whisper-compatible speech-to-text API. It works with any provider that offers an OpenAI-compatible `/audio/transcriptions` endpoint.
+
+#### Environment variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `TRANSCRIBER_API_KEY` | **Yes** | API key for your chosen provider |
+| `TRANSCRIBER_PROVIDER` | No | Provider preset: `openai`, `fireworks`, or `groq`. Auto-configures the base URL and model. |
+| `TRANSCRIBER_BASE_URL` | No | Override the API base URL (for custom/self-hosted endpoints) |
+| `TRANSCRIBER_MODEL` | No | Override the default Whisper model name |
+
+If you set `TRANSCRIBER_PROVIDER`, the base URL and model are filled in automatically. You can still override either one individually. If you don't set a provider, the base URL and model must be supplied explicitly (or they default to OpenAI).
+
+The legacy `FIREWORKS_API_KEY` variable still works -- if set without any `TRANSCRIBER_*` variables, it auto-selects the Fireworks provider.
+
+#### Built-in provider presets
+
+| Provider | `TRANSCRIBER_PROVIDER` | Default Model | API Base URL |
+|----------|----------------------|---------------|--------------|
+| OpenAI | `openai` | `whisper-1` | `https://api.openai.com/v1` |
+| Fireworks AI | `fireworks` | `whisper-v3` | `https://api.fireworks.ai/inference/v1` |
+| Groq | `groq` | `whisper-large-v3-turbo` | `https://api.groq.com/openai/v1` |
+
+#### Examples
+
+**Groq** (fast and free tier available):
+
+```yaml
+- ENABLE_YOUTUBE_TRANSCRIBER=true
+- TRANSCRIBER_PROVIDER=groq
+- TRANSCRIBER_API_KEY=gsk_your_groq_key_here
+```
+
+**OpenAI**:
+
+```yaml
+- ENABLE_YOUTUBE_TRANSCRIBER=true
+- TRANSCRIBER_PROVIDER=openai
+- TRANSCRIBER_API_KEY=sk-your_openai_key_here
+```
+
+**Fireworks AI**:
+
+```yaml
+- ENABLE_YOUTUBE_TRANSCRIBER=true
+- TRANSCRIBER_PROVIDER=fireworks
+- TRANSCRIBER_API_KEY=fw_your_fireworks_key_here
+```
+
+**Custom / self-hosted endpoint** (e.g. a local Whisper server):
+
+```yaml
+- ENABLE_YOUTUBE_TRANSCRIBER=true
+- TRANSCRIBER_API_KEY=any-value
+- TRANSCRIBER_BASE_URL=http://my-whisper-server:8000/v1
+- TRANSCRIBER_MODEL=whisper-large-v3
+```
+
+**Groq with a specific model override**:
+
+```yaml
+- ENABLE_YOUTUBE_TRANSCRIBER=true
+- TRANSCRIBER_PROVIDER=groq
+- TRANSCRIBER_API_KEY=gsk_your_groq_key_here
+- TRANSCRIBER_MODEL=whisper-large-v3
+```
 
 ### Full configuration example
 
@@ -248,9 +317,10 @@ environment:
   # Documentation lookup
   - ENABLE_CONTEXT7=true
   - CONTEXT7_API_KEY=your_key_here
-  # YouTube transcription
+  # YouTube transcription (pick your provider -- see YouTube Transcriber section above)
   - ENABLE_YOUTUBE_TRANSCRIBER=true
-  - FIREWORKS_API_KEY=your_fireworks_key_here
+  - TRANSCRIBER_PROVIDER=groq
+  - TRANSCRIBER_API_KEY=your_api_key_here
   # Web fetching and local git
   - ENABLE_FETCH=true
   - ENABLE_GIT=true
@@ -260,7 +330,7 @@ environment:
 
 ```yaml
 volumes:
-  - /workspace:/workspace:rw   # Your project files (used by Filesystem MCP)
+  - workspace:/workspace:rw    # Your project files (used by Filesystem MCP)
   - data:/data:rw              # Persistent storage (Memory MCP stores data here)
 ```
 
@@ -299,8 +369,8 @@ docker exec -i SuperMCP npx @modelcontextprotocol/server-filesystem /workspace
 docker exec -i SuperMCP npx @modelcontextprotocol/server-memory
 docker exec -i SuperMCP npx @modelcontextprotocol/server-sequential-thinking
 docker exec -i SuperMCP npx @modelcontextprotocol/server-github
-docker exec -i SuperMCP python3.11 -m mcp_server_fetch
-docker exec -i SuperMCP python3.11 -m mcp_server_git --repository /workspace
+docker exec -i SuperMCP python3 -m mcp_server_fetch
+docker exec -i SuperMCP python3 -m mcp_server_git --repository /workspace
 ```
 
 This works regardless of which servers are enabled via environment variables -- the packages are always there.
