@@ -1,44 +1,37 @@
 {
   "mcpServers": {
     "Playwright_MCP": {
-      "command": "docker",
-      "args": [
-        "exec",
-        "-i",
-        "3AmigosMCP",
-        "npx",
-        "@playwright/mcp@latest",
-        "--headless",
-        "--isolated",
-        "--no-sandbox",
-        "--browser",
-        "chromium"
-      ]
+      "url": "http://localhost:8080/playwright"
     },
     "Filesystem_MCP": {
-      "command": "docker",
-      "args": [
-        "exec",
-        "-i",
-        "3AmigosMCP",
-        "npx",
-        "@modelcontextprotocol/server-filesystem",
-        "/workspace"
-      ]
+      "url": "http://localhost:8080/filesystem"
     },
-    "Database_MCP": {
-      "command": "docker",
-      "args": [
-        "exec",
-        "-i",
-        "3AmigosMCP",
-        "npx",
-        "@ahmetbarut/mcp-database-server",
-        "--database",
-        "/data/data.db",
-        "--allowed-directories",
-        "/workspace"
-      ]
+    "Sequential_Thinking_MCP": {
+      "url": "http://localhost:8080/sequential-thinking"
+    },
+    "Memory_MCP": {
+      "url": "http://localhost:8080/memory"
+    },
+    "GitHub_MCP": {
+      "url": "http://localhost:8080/github"
+    },
+    "SearXNG_MCP": {
+      "url": "http://localhost:8080/searxng"
+    },
+    "Context7_MCP": {
+      "url": "http://localhost:8080/context7"
+    },
+    "Python_Interpreter_MCP": {
+      "url": "http://localhost:8080/python-interpreter"
+    },
+    "YouTube_Transcriber_MCP": {
+      "url": "http://localhost:8080/youtube-transcriber"
+    },
+    "Fetch_MCP": {
+      "url": "http://localhost:8080/fetch"
+    },
+    "Git_MCP": {
+      "url": "http://localhost:8080/git"
     }
   }
 }

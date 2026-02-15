@@ -1,56 +1,75 @@
 FROM mcr.microsoft.com/playwright:v1.40.0-focal
 
 # Set environment variables
-ENV DEBIAN_FRONTEND=noninteractive
-ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+ENV DEBIAN_FRONTEND=noninteractive \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+    PLAYWRIGHT_CHROME_CHANNEL=chrome
 
-# Install system dependencies and Node.js
-RUN apt-get update && apt-get install -y \
+# Install system dependencies, Node.js, Python 3.11, ffmpeg, and Google Chrome
+RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     wget \
     git \
     sqlite3 \
     gnupg \
     ca-certificates \
+    software-properties-common \
+    ffmpeg \
+    && add-apt-repository ppa:deadsnakes/ppa \
     && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
-    && apt-get install -y nodejs \
+    && wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - \
+    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
+    && apt-get update \
+    && apt-get install -y nodejs google-chrome-stable \
+       python3.11 python3.11-venv python3.11-distutils \
+    && curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install MCP servers
-RUN npm install -g @playwright/mcp@latest \
+# Install Python packages for MCP servers
+RUN python3.11 -m pip install --no-cache-dir mcp openai yt-dlp mcp-server-fetch mcp-server-git
+
+# Install all MCP server packages globally
+# These are installed at build time but only start when enabled via environment variables
+RUN npm install -g \
+    @playwright/mcp@latest \
     @modelcontextprotocol/server-filesystem@latest \
-    @ahmetbarut/mcp-database-server@latest
+    @modelcontextprotocol/server-sequential-thinking@latest \
+    @modelcontextprotocol/server-memory@latest \
+    @modelcontextprotocol/server-github@latest \
+    mcp-searxng@latest \
+    @upstash/context7-mcp@latest \
+    supergateway@latest
 
-# Install Playwright browsers (Chromium only for headless mode)
-# Chromium comes bundled with Playwright and is optimized for headless automation
-RUN npx playwright install chromium --with-deps
+# Set up gateway application with dependencies
+RUN mkdir -p /app && \
+    echo '{"name":"mcp-gateway","private":true}' > /app/package.json && \
+    cd /app && npm install express http-proxy-middleware @modelcontextprotocol/sdk zod
 
-# Create workspace directory with proper permissions
-RUN mkdir -p /workspace /data && \
-    chmod 755 /workspace && \
-    chmod 755 /data
+# Install Playwright browsers
+RUN npx playwright install --with-deps
+
+# Create directories
+RUN mkdir -p /workspace /data /var/log/mcp /var/run && \
+    chmod 755 /workspace /data
+
+# Copy application files
+COPY gateway.js /app/gateway.js
+COPY python-interpreter.mjs /app/python-interpreter.mjs
+COPY youtube_summerizer.py /app/youtube_transcriber.py
+
+# Copy scripts
+COPY healthcheck.sh /healthcheck.sh
+COPY start-mcps.sh /start-mcps.sh
+RUN chmod +x /healthcheck.sh /start-mcps.sh
 
 # Set working directory
 WORKDIR /workspace
 
-# Expose ports for MCP servers
-EXPOSE 8081 8082 8083
+# Expose gateway port only
+EXPOSE 8080
 
-# Health check
-COPY healthcheck.sh /healthcheck.sh
-RUN chmod +x /healthcheck.sh
-
-# Copy startup script and HTTP server files
-COPY start-mcps.sh /start-mcps.sh
-COPY filesystem-server.js /filesystem-server.js
-COPY database-server.js /database-server.js
-RUN chmod +x /start-mcps.sh
-
-# Create necessary directories
-RUN mkdir -p /var/log/mcp /var/run
-
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD /healthcheck.sh
 
-# Default command - start MCP servers
+# Default command - start MCP gateway
 CMD ["/start-mcps.sh"]

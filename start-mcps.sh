@@ -1,78 +1,163 @@
 #!/bin/bash
 
-# Start script for 3AmigosMCP container
-# This script starts all three MCP servers in the background with detailed logging
+# MCP Gateway Startup Script
+# Starts enabled MCP servers via supergateway, then launches the Express gateway.
+# Enable servers by setting ENABLE_<NAME>=true environment variables.
 
-echo "Starting 3AmigosMCP servers..."
+set -e
 
-# Create log directory
-mkdir -p /var/log/mcp
+echo "============================================"
+echo "  MCP Gateway - Starting up"
+echo "============================================"
 
-# Ensure workspace directory has proper permissions
-chmod 755 /workspace 2>/dev/null || true
-chmod 755 /data 2>/dev/null || true
+mkdir -p /var/log/mcp /var/run
 
-# Function to start MCP server with logging
-start_mcp_server() {
+# ── Helper: start an MCP server wrapped in supergateway ───────────────────────
+start_mcp() {
     local name=$1
-    local command=$2
-    local port=$3
-    
-    echo "Starting $name on port $port..."
-    echo "$(date): Starting $name server" >> /var/log/mcp/${name,,}.log
-    
-    # Start the server in background with logging
-    $command >> /var/log/mcp/${name,,}.log 2>&1 &
+    local port=$2
+    local command=$3
+    local log_file="/var/log/mcp/${name}.log"
+
+    echo "[+] Starting ${name} on internal port ${port}..."
+    echo "$(date '+%Y-%m-%d %H:%M:%S'): Starting ${name}" >> "$log_file"
+    echo "    Command: ${command}" >> "$log_file"
+
+    npx -y supergateway \
+        --stdio "${command}" \
+        --outputTransport streamableHttp \
+        --port "${port}" \
+        --streamableHttpPath /mcp \
+        >> "$log_file" 2>&1 &
+
     local pid=$!
-    echo $pid > /var/run/${name,,}.pid
-    
-    echo "$(date): $name server started with PID $pid" >> /var/log/mcp/${name,,}.log
-    echo "$name server started with PID $pid"
+    echo $pid > "/var/run/${name}.pid"
+    echo "    PID: ${pid}"
 }
 
-# Start Playwright MCP server on port 8081
-start_mcp_server "Playwright" "npx @playwright/mcp@latest --headless --isolated --no-sandbox --browser chromium --port 8081" 8081
+STARTED=0
 
-# Start simple HTTP server for Filesystem MCP on port 8082
-start_mcp_server "Filesystem-HTTP" "node /filesystem-server.js" 8082
+# ── Playwright MCP ────────────────────────────────────────────────────────────
+if [ "${ENABLE_PLAYWRIGHT}" = "true" ]; then
+    start_mcp "playwright" 8081 \
+        "npx -y @playwright/mcp@latest --headless --isolated --no-sandbox --browser chrome"
+    STARTED=$((STARTED + 1))
+fi
 
-# Start simple HTTP server for Database MCP on port 8083
-start_mcp_server "Database-HTTP" "node /database-server.js" 8083
+# ── Filesystem MCP ────────────────────────────────────────────────────────────
+if [ "${ENABLE_FILESYSTEM}" = "true" ]; then
+    start_mcp "filesystem" 8082 \
+        "npx -y @modelcontextprotocol/server-filesystem /workspace"
+    STARTED=$((STARTED + 1))
+fi
 
-# Note: Both Filesystem and Database MCP servers are available via stdio transport
-# They will be started via docker exec commands as configured in cursor-mcp-config.json
-echo "Filesystem and Database MCP servers are available via stdio transport"
+# ── Sequential Thinking MCP ──────────────────────────────────────────────────
+if [ "${ENABLE_SEQUENTIAL_THINKING}" = "true" ]; then
+    start_mcp "sequential-thinking" 8083 \
+        "npx -y @modelcontextprotocol/server-sequential-thinking"
+    STARTED=$((STARTED + 1))
+fi
 
-echo "All MCP servers started. Logs available in /var/log/mcp/"
-echo "Playwright MCP: http://localhost:8081"
-echo "Filesystem MCP: http://localhost:8082"
-echo "Database MCP: http://localhost:8083"
+# ── Memory MCP ────────────────────────────────────────────────────────────────
+if [ "${ENABLE_MEMORY}" = "true" ]; then
+    export MEMORY_FILE_PATH="${MEMORY_FILE_PATH:-/data/memory.jsonl}"
+    start_mcp "memory" 8084 \
+        "npx -y @modelcontextprotocol/server-memory"
+    STARTED=$((STARTED + 1))
+fi
 
-# Keep the container running and show logs
-echo "Container logs will be displayed below. Press Ctrl+C to stop."
-echo "================================================================"
+# ── GitHub MCP ────────────────────────────────────────────────────────────────
+if [ "${ENABLE_GITHUB}" = "true" ]; then
+    if [ -z "${GITHUB_PERSONAL_ACCESS_TOKEN}" ]; then
+        echo "[!] WARNING: ENABLE_GITHUB=true but GITHUB_PERSONAL_ACCESS_TOKEN is not set. Skipping."
+    else
+        start_mcp "github" 8085 \
+            "npx -y @modelcontextprotocol/server-github"
+        STARTED=$((STARTED + 1))
+    fi
+fi
 
-# Function to monitor and display logs
-monitor_logs() {
-    while true; do
-        echo "$(date): Container is running - MCP servers active"
-        echo "Recent Playwright MCP logs:"
-        tail -n 5 /var/log/mcp/playwright.log 2>/dev/null || echo "No logs yet"
-        echo "Recent Filesystem MCP logs:"
-        tail -n 5 /var/log/mcp/filesystem.log 2>/dev/null || echo "No logs yet"
-        echo "Recent Database MCP logs:"
-        tail -n 5 /var/log/mcp/database.log 2>/dev/null || echo "No logs yet"
-        echo "================================================================"
-        sleep 30
+# ── SearXNG MCP ──────────────────────────────────────────────────────────────
+if [ "${ENABLE_SEARXNG}" = "true" ]; then
+    if [ -z "${SEARXNG_SERVER_URL}" ]; then
+        echo "[!] WARNING: ENABLE_SEARXNG=true but SEARXNG_SERVER_URL is not set. Skipping."
+    else
+        start_mcp "searxng" 8086 \
+            "npx -y mcp-searxng"
+        STARTED=$((STARTED + 1))
+    fi
+fi
+
+# ── Context7 MCP ─────────────────────────────────────────────────────────────
+if [ "${ENABLE_CONTEXT7}" = "true" ]; then
+    start_mcp "context7" 8087 \
+        "npx -y @upstash/context7-mcp"
+    STARTED=$((STARTED + 1))
+fi
+
+# ── Python Interpreter MCP ───────────────────────────────────────────────────
+if [ "${ENABLE_PYTHON_INTERPRETER}" = "true" ]; then
+    start_mcp "python-interpreter" 8088 \
+        "node /app/python-interpreter.mjs"
+    STARTED=$((STARTED + 1))
+fi
+
+# ── YouTube Transcriber MCP (requires FIREWORKS_API_KEY) ─────────────────────
+if [ "${ENABLE_YOUTUBE_TRANSCRIBER}" = "true" ]; then
+    if [ -z "${FIREWORKS_API_KEY}" ]; then
+        echo "[!] WARNING: ENABLE_YOUTUBE_TRANSCRIBER=true but FIREWORKS_API_KEY is not set. Skipping."
+    else
+        start_mcp "youtube-transcriber" 8089 \
+            "python3.11 /app/youtube_transcriber.py"
+        STARTED=$((STARTED + 1))
+    fi
+fi
+
+# ── Fetch MCP ────────────────────────────────────────────────────────────────
+if [ "${ENABLE_FETCH}" = "true" ]; then
+    start_mcp "fetch" 8090 \
+        "python3.11 -m mcp_server_fetch"
+    STARTED=$((STARTED + 1))
+fi
+
+# ── Git MCP ──────────────────────────────────────────────────────────────────
+if [ "${ENABLE_GIT}" = "true" ]; then
+    start_mcp "git" 8091 \
+        "python3.11 -m mcp_server_git --repository /workspace"
+    STARTED=$((STARTED + 1))
+fi
+
+echo ""
+echo "--------------------------------------------"
+echo "  ${STARTED} MCP server(s) enabled"
+echo "--------------------------------------------"
+
+# Give backends a moment to initialize
+if [ $STARTED -gt 0 ]; then
+    echo "Waiting for backends to initialize..."
+    sleep 3
+fi
+
+# ── Start the gateway in the foreground ───────────────────────────────────────
+echo "Starting MCP Gateway on port 8080..."
+cd /app && node gateway.js &
+GATEWAY_PID=$!
+
+# Graceful shutdown: kill all child processes on SIGTERM/SIGINT
+shutdown() {
+    echo ""
+    echo "Shutting down MCP Gateway..."
+    # Kill all supergateway processes
+    for pidfile in /var/run/*.pid; do
+        if [ -f "$pidfile" ]; then
+            kill "$(cat "$pidfile")" 2>/dev/null || true
+        fi
     done
+    # Kill gateway
+    kill $GATEWAY_PID 2>/dev/null || true
+    exit 0
 }
+trap shutdown INT TERM
 
-# Start log monitoring in background
-monitor_logs &
-monitor_pid=$!
-
-# Wait for interrupt signal
-trap 'echo "Shutting down MCP servers..."; kill $(cat /var/run/*.pid 2>/dev/null) 2>/dev/null; kill $monitor_pid 2>/dev/null; exit 0' INT TERM
-
-# Keep container running
-wait
+# Keep the container running
+wait $GATEWAY_PID

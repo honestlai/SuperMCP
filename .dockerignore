@@ -1,6 +1,7 @@
 .git
 .gitignore
 README.md
+SETUP.md
 docker-compose.yml
 .dockerignore
 workspace/
@@ -8,3 +9,5 @@ data/
 *.log
 node_modules/
 .DS_Store
+test-mcps.sh
+cursor-mcp-config.json

@@ -1,17 +1,35 @@
 services:
-  3amigosmcp:
+  supermcp:
     build: .
-    container_name: 3AmigosMCP
+    container_name: SuperMCP
     ports:
-      - "8091:8081"  # Playwright MCP
-      - "8092:8082"  # Filesystem MCP
-      - "8093:8083"  # Database MCP
+      - "8080:8080"    # MCP Gateway (single entry point)
     volumes:
       - /workspace:/workspace:rw
       - data:/data:rw
     environment:
       - PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+      - PLAYWRIGHT_CHROME_CHANNEL=chrome
       - PLAYWRIGHT_HEADLESS=true
+      # ─── Enable MCP servers (all disabled by default) ───
+      # Uncomment the lines below to enable individual MCP servers.
+      # Access enabled servers at: http://<server>:8080/<name>
+      #
+      # - ENABLE_PLAYWRIGHT=true
+      # - ENABLE_FILESYSTEM=true
+      # - ENABLE_SEQUENTIAL_THINKING=true
+      # - ENABLE_MEMORY=true
+      # - ENABLE_GITHUB=true
+      # - GITHUB_PERSONAL_ACCESS_TOKEN=ghp_your_token_here
+      # - ENABLE_SEARXNG=true
+      # - SEARXNG_SERVER_URL=http://searxng:8080
+      # - ENABLE_CONTEXT7=true
+      # - CONTEXT7_API_KEY=your_key_here
+      # - ENABLE_PYTHON_INTERPRETER=true
+      # - ENABLE_YOUTUBE_TRANSCRIBER=true
+      # - FIREWORKS_API_KEY=your_fireworks_api_key_here
+      # - ENABLE_FETCH=true
+      # - ENABLE_GIT=true
     restart: unless-stopped
     networks:
       - Network-Bridge
@@ -20,7 +38,24 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 60s
+
+  # ─── SearXNG search engine (used by the SearXNG MCP server) ───
+  # This service is only needed if you enable ENABLE_SEARXNG above.
+  # If you already run your own SearXNG instance, remove this service
+  # and point SEARXNG_SERVER_URL to your existing instance instead.
+  searxng:
+    image: searxng/searxng:latest
+    container_name: searxng
+    ports:
+      - "8888:8080"    # SearXNG web UI (optional, for testing)
+    volumes:
+      - searxng-data:/etc/searxng
+    environment:
+      - SEARXNG_BASE_URL=http://searxng:8080/
+    restart: unless-stopped
+    networks:
+      - Network-Bridge
 
 networks:
   Network-Bridge:
@@ -28,3 +63,4 @@ networks:
 
 volumes:
   data:
+  searxng-data:

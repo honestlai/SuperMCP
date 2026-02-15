@@ -1,56 +1,12 @@
 #!/bin/bash
 
-# Health check for 3AmigosMCP container
-# Checks if the container is running and MCP servers are accessible
+# Health check for MCP Gateway
+# Verifies the gateway is responding on port 8080
 
-# Check if container is running
-if ! pgrep -f "/start-mcps.sh" > /dev/null; then
-    echo "Container process not running"
+if ! curl -sf http://localhost:8080/health > /dev/null 2>&1; then
+    echo "MCP Gateway not responding on port 8080"
     exit 1
 fi
 
-# Check if Node.js is available
-if ! command -v node &> /dev/null; then
-    echo "Node.js not found"
-    exit 1
-fi
-
-# Check if npm is available
-if ! command -v npm &> /dev/null; then
-    echo "npm not found"
-    exit 1
-fi
-
-# Check if HTTP-based MCP servers are running on their ports
-if ! curl -s http://localhost:8081 > /dev/null; then
-    echo "Playwright MCP not responding on port 8081"
-    exit 1
-fi
-
-# Note: Database MCP server needs additional configuration to run as a service
-# For now, we'll skip the database server health check
-# if ! curl -s http://localhost:8083 > /dev/null; then
-#     echo "Database MCP not responding on port 8083"
-#     exit 1
-# fi
-
-# Check if Filesystem MCP package is available and can access workspace
-if ! timeout 5s npx @modelcontextprotocol/server-filesystem /workspace &> /dev/null; then
-    echo "Filesystem MCP package not available or cannot access workspace"
-    exit 1
-fi
-
-# Check if workspace directory exists
-if [ ! -d "/workspace" ]; then
-    echo "Workspace directory not found"
-    exit 1
-fi
-
-# Check if data directory exists
-if [ ! -d "/data" ]; then
-    echo "Data directory not found"
-    exit 1
-fi
-
-echo "3AmigosMCP container is healthy"
+echo "MCP Gateway is healthy"
 exit 0

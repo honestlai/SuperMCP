@@ -1,54 +1,75 @@
-# 3AmigosMCP Setup Guide
+# MCP Gateway Setup Guide
 
 ## Quick Start
 
 ### 1. Clone the Repository
+
 ```bash
-git clone https://github.com/honestlai/3AmigosMCP.git
-cd 3AmigosMCP
+git clone https://github.com/honestlai/SuperMCP.git
+cd SuperMCP
 ```
 
-### 2. Start the Container
+### 2. Create the Docker Network (if it doesn't exist)
+
 ```bash
-docker compose up -d
+docker network create Network-Bridge
 ```
 
-### 3. Verify Everything is Working
-```bash
-./test-mcps.sh
+### 3. Enable Your MCP Servers
+
+Edit `docker-compose.yml` and uncomment the servers you want to use. For example, to enable Playwright and Filesystem:
+
+```yaml
+environment:
+  - PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+  - PLAYWRIGHT_CHROME_CHANNEL=chrome
+  - PLAYWRIGHT_HEADLESS=true
+  - ENABLE_PLAYWRIGHT=true
+  - ENABLE_FILESYSTEM=true
 ```
 
-### 4. Configure Your MCP Client
+### 4. Build and Start
 
-Copy the configuration from `cursor-mcp-config.json` to your Cursor/VS Code MCP settings.
+```bash
+docker compose up -d --build
+```
+
+### 5. Verify
+
+```bash
+curl http://localhost:8080/health
+```
+
+You should see a JSON response listing your active MCP servers.
+
+### 6. Configure Your MCP Client
+
+Copy the relevant entries from `cursor-mcp-config.json` to your Cursor or VS Code MCP settings. Only add entries for the servers you enabled.
 
 ## Container Information
 
-- **Container Name**: `3AmigosMCP`
-- **Ports**: 
-  - 8091: Playwright MCP
-  - 8092: Filesystem MCP  
-  - 8093: Database MCP
+- **Container Name**: `SuperMCP`
+- **Gateway Port**: 8080
+- **Access Pattern**: `http://<server>:8080/<mcp-name>`
 - **Volumes**:
-  - `./workspace` → `/workspace` (Filesystem MCP root)
-  - `./data` → `/data` (Database storage)
+  - `/workspace` -- shared filesystem workspace
+  - `/data` -- persistent data storage
 
-## Meet the Amigos
+## Available MCP Servers
 
-🎭 **Playwright** - The Browser Whisperer
-- Web automation and browser control
-- Supports Chrome, Firefox, WebKit, and Edge
-- Headless and headed modes
-
-📁 **Filesystem** - The File Wrangler
-- File and directory operations
-- Read/write access to workspace
-- Secure access control
-
-🗄️ **Database** - The Data Guardian
-- Multi-database support (SQLite, PostgreSQL, MySQL)
-- Query execution and data management
-- Environment-based configuration
+| Server | Enable Variable | URL Path | Notes |
+|--------|----------------|----------|-------|
+| Playwright | `ENABLE_PLAYWRIGHT=true` | `/playwright` | Browser automation |
+| Filesystem | `ENABLE_FILESYSTEM=true` | `/filesystem` | File operations on /workspace |
+| Sequential Thinking | `ENABLE_SEQUENTIAL_THINKING=true` | `/sequential-thinking` | Step-by-step reasoning |
+| Memory | `ENABLE_MEMORY=true` | `/memory` | Knowledge graph memory |
+| GitHub | `ENABLE_GITHUB=true` | `/github` | Needs `GITHUB_PERSONAL_ACCESS_TOKEN` |
+| SearXNG | `ENABLE_SEARXNG=true` | `/searxng` | Needs `SEARXNG_SERVER_URL` |
+| Context7 | `ENABLE_CONTEXT7=true` | `/context7` | Optional: `CONTEXT7_API_KEY` |
+| Python Interpreter | `ENABLE_PYTHON_INTERPRETER=true` | `/python-interpreter` | Execute Python 3 code |
+| YouTube Transcriber | `ENABLE_YOUTUBE_TRANSCRIBER=true` | `/youtube-transcriber` | Needs `FIREWORKS_API_KEY` |
+| Fetch | `ENABLE_FETCH=true` | `/fetch` | Fetch URLs as markdown |
+| Git | `ENABLE_GIT=true` | `/git` | Local git operations on /workspace |
 
 ## Management Commands
 
@@ -59,36 +80,52 @@ docker compose up -d
 # Stop container
 docker compose down
 
-# View logs
-docker compose logs -f
+# Rebuild after changes
+docker compose up -d --build
+
+# View gateway logs
+docker logs SuperMCP
+
+# View individual MCP logs
+docker exec SuperMCP cat /var/log/mcp/playwright.log
+
+# Check health
+curl http://localhost:8080/health
 
 # Check status
-docker ps
-
-# Test all MCPs
-./test-mcps.sh
+docker ps | grep SuperMCP
 ```
 
 ## Troubleshooting
 
 ### Container Not Starting
+
 ```bash
-# Check logs
+# Check logs for errors
 docker compose logs
 
-# Rebuild container
+# Rebuild from scratch
 docker compose down
 docker compose build --no-cache
 docker compose up -d
 ```
 
-### MCP Connection Issues
-- Verify container is running: `docker ps`
-- Check health status: `docker inspect --format='{{.State.Health.Status}}' 3AmigosMCP`
-- Test individual MCPs using the test script
+### MCP Server Not Responding
+
+- Verify the server is enabled in `docker-compose.yml`
+- Check the server's log file inside the container
+- Wait 10-15 seconds after container start for backends to initialize
 
 ### Port Conflicts
-If ports 8091-8093 are in use, modify `docker-compose.yml` to use different ports.
+
+If port 8080 is already in use, change the host port in `docker-compose.yml`:
+
+```yaml
+ports:
+  - "9090:8080"    # Use port 9090 instead
+```
+
+Then access servers at `http://localhost:9090/<name>`.
 
 ## Support
 

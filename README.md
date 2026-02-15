@@ -1,392 +1,337 @@
-## About The 3 Amigos MCP
+# MCP Gateway
 
-After discovering, using, and being absolutely blown away by the possibilities of Playwright MCP, I started looking around for other complementary MCP projects I could/should put together. This led me to what I call the "Three Amigos" - a powerful trio that I believe will be essential for most small to medium-sized projects I'll be building or experimenting with.
+**One container. One port. Every MCP your AI coding agent needs.**
 
-The idea was simple: combine browser automation, file system access, and database operations into one seamless container. Why? Because when you're building modern applications, you're almost always working with web interfaces, managing files, and handling data. Having all three capabilities available directly in your AI coding environment just makes sense.
+MCP Gateway is a self-hosted Docker container that bundles eleven of the most useful MCP (Model Context Protocol) servers behind a single HTTP endpoint. Nothing runs by default. You pick what you need, flip an environment variable, and your AI agent gets instant access to browser automation, file operations, web search, GitHub, persistent memory, and more -- all through clean, predictable URLs.
 
-I feel like moving forward most small to medium sized projects I'll be building or experimenting on will likely benefit greatly from these '3 amigos'.
+```
+http://your-server:8080/playwright
+http://your-server:8080/filesystem
+http://your-server:8080/memory
+http://your-server:8080/github
+http://your-server:8080/context7
+...
+```
 
-*Note: A container hub build is on its way... I know this is kind of a hefty 3-headed beast to build :P*
+No juggling ports. No managing separate containers. No figuring out which MCP package supports HTTP and which one only speaks stdio. The gateway handles all of that for you.
 
-## Meet the Amigos
+---
 
-🎭 **Playwright** - The Browser Whisperer
-- Full browser automation and web scraping
-- Screenshot capture and visual testing
-- Form filling and navigation automation
-- Mobile device emulation and responsive testing
-- PDF generation from web pages
-- Network interception and debugging
+## Why This Exists
 
-📁 **Filesystem** - The File Wrangler
-- File and directory operations
-- Read/write access to your local filesystem workspace
-- Direct access to codebases and development files
-- Secure access control and permissions
-- File watching and monitoring
-- Batch file operations
-- Workspace organization and management
+If you've spent any time building with AI coding agents, you've probably hit the same wall: the agent is brilliant at writing code, but it can't browse the web, can't touch the filesystem, can't search documentation, can't look at your GitHub issues. Each of those capabilities lives in its own MCP server, each with its own setup, its own transport quirks, and its own container or process to manage.
 
-🗄️ **Database** - The Data Guardian
-- Multi-database support (SQLite, PostgreSQL, MySQL)
-- Query execution and data management
-- Database schema exploration
-- Data import/export operations
-- Connection pooling and optimization
-- Environment-based configuration
+This project started as a way to solve that problem for my own workflow. I wanted to sit down, open Cursor, and have everything available -- browser automation for testing, filesystem access for reading and writing code, memory for context that persists across sessions, web search for looking things up, and GitHub integration for managing repos. I didn't want to run five containers and remember five different port numbers.
 
-## 🏗️ Architecture
+The result is a single Docker image that pre-installs all eleven MCP servers at build time, but starts none of them. You control exactly what runs through environment variables in your `docker-compose.yml`. The internal gateway takes care of bridging each server to HTTP and exposing it on a clean URL path. Your AI agent just connects to `http://your-server:8080/playwright` and it works.
 
-This container provides two connection modes optimized for different deployment scenarios:
+---
 
-### **Command-Based Mode (Recommended for SSH/Remote)**
+## What's Inside
 
-* **Best for**: SSH tunnels, remote servers, Cloudflare connections
-* **How it works**: Client executes MCP servers directly via `docker exec`
-* **Benefits**: No persistent HTTP connections, eliminates timeout issues
-* **Use case**: When you're connecting over SSH or experiencing connection drops
+| Server | Path | What It Does |
+|--------|------|--------------|
+| **Playwright** | `/playwright` | Full browser automation -- navigate pages, click buttons, fill forms, take screenshots, scrape content, test web apps |
+| **Filesystem** | `/filesystem` | Read, write, move, and search files and directories within your mounted `/workspace` |
+| **Sequential Thinking** | `/sequential-thinking` | Gives your agent a structured way to reason through complex, multi-step problems before acting |
+| **Memory** | `/memory` | A persistent knowledge graph that survives across sessions -- your agent can remember things |
+| **GitHub** | `/github` | Full GitHub API access -- create repos, manage issues and PRs, read code, search across repositories |
+| **SearXNG** | `/searxng` | Privacy-respecting web search through your own SearXNG instance |
+| **Context7** | `/context7` | Pulls up-to-date documentation for libraries and frameworks, so your agent isn't working from stale training data |
+| **Python Interpreter** | `/python-interpreter` | Executes Python 3 code directly inside the container and returns the output |
+| **YouTube Transcriber** | `/youtube-transcriber` | Downloads YouTube audio and transcribes it using Fireworks AI's Whisper API |
+| **Fetch** | `/fetch` | Fetches any URL and returns the content as clean markdown -- great for reading docs, calling APIs, checking live pages |
+| **Git** | `/git` | Local git operations on your `/workspace` repo -- status, diff, commit, branch, log, checkout, and more |
 
-### **HTTP Mode (Suitable for Local)**
+Every server is an official or well-maintained community MCP package, pre-installed in the image and ready to go. You just decide which ones to turn on.
 
-* **Best for**: Local development, direct connections
-* **How it works**: MCP servers run as HTTP services on ports 8091-8093
-* **Benefits**: Standard MCP protocol, familiar HTTP endpoints
-* **Use case**: When running locally without network issues
+A SearXNG search engine instance is also bundled in the `docker-compose.yml` as a separate service, so web search works out of the box with no extra setup.
 
-## 🚀 Quick Start
+---
+
+## How It Works
+
+The architecture is straightforward. A single Express.js gateway listens on port 8080 and routes incoming requests to internal MCP backends based on the URL path.
+
+Most MCP servers only support stdio transport (they read from stdin and write to stdout). The gateway uses [supergateway](https://www.npmjs.com/package/supergateway) to bridge each one into an HTTP endpoint using the MCP Streamable HTTP transport. The result is that every server, regardless of its native transport, is accessible over plain HTTP.
+
+```
+Your AI Agent
+     |
+     |  POST http://server:8080/filesystem
+     |
+     v
+ ┌────────────────────────────────────────────────────┐
+ │  Docker Container                                  │
+ │                                                    │
+ │  Express Gateway (:8080)                           │
+ │     |                                              │
+ │     |  path-based routing                          │
+ │     |                                              │
+ │     ├── /playwright ──> supergateway (:8081)       │
+ │     ├── /filesystem ──> supergateway (:8082)       │
+ │     ├── /sequential-thinking ──> supergateway (:8083)│
+ │     ├── /memory ──────> supergateway (:8084)       │
+ │     ├── /github ──────> supergateway (:8085)       │
+ │     ├── /searxng ─────> supergateway (:8086)       │
+ │     ├── /context7 ────> supergateway (:8087)       │
+ │     ├── /python-interpreter ──> supergateway (:8088)│
+ │     ├── /youtube-transcriber ──> supergateway (:8089)│
+ │     ├── /fetch ─────────────> supergateway (:8090)│
+ │     └── /git ───────────────> supergateway (:8091)│
+ │                                                    │
+ └────────────────────────────────────────────────────┘
+```
+
+On startup, the container reads your environment variables, launches only the servers you've enabled, and starts the gateway. If you haven't enabled anything, the gateway still runs -- it just serves a helpful index page telling you how to turn things on.
+
+---
+
+## Getting Started
 
 ### Prerequisites
 
-* Docker and Docker Compose installed
-* Cursor or VS Code with MCP support
+- Docker and Docker Compose
+- A Docker network for the container (create it once: `docker network create Network-Bridge`)
 
-### 1\. Clone and Start
-
-```bash
-git clone https://github.com/honestlai/3AmigosMCP.git
-cd 3AmigosMCP
-docker compose up -d
-```
-
-### 2\. Verify Everything is Working
+### 1. Clone the repo
 
 ```bash
-./test-mcps.sh
+git clone https://github.com/honestlai/SuperMCP.git
+cd SuperMCP
 ```
 
-### 3\. Configure Your MCP Client
+### 2. Choose your servers
 
-#### For Command-Based Mode (SSH/Remote Recommended)
-
-```json
-{
-  "mcpServers": {
-    "Playwright_MCP": {
-      "command": "docker",
-      "args": [
-        "exec",
-        "-i",
-        "3AmigosMCP",
-        "npx",
-        "@playwright/mcp@latest",
-        "--headless",
-        "--isolated",
-        "--no-sandbox",
-        "--browser",
-        "chromium"
-      ]
-    },
-    "Filesystem_MCP": {
-      "command": "docker",
-      "args": [
-        "exec",
-        "-i",
-        "3AmigosMCP",
-        "npx",
-        "@modelcontextprotocol/server-filesystem",
-        "/workspace"
-      ]
-    },
-    "Database_MCP": {
-      "command": "docker",
-      "args": [
-        "exec",
-        "-i",
-        "3AmigosMCP",
-        "npx",
-        "@ahmetbarut/mcp-database-server",
-        "--database",
-        "/data/data.db",
-        "--allowed-directories",
-        "/workspace"
-      ]
-    }
-  }
-}
-```
-
-#### For HTTP Mode (Local Development)
-
-```json
-{
-  "mcpServers": {
-    "Playwright_MCP": {
-      "url": "http://localhost:8091/mcp",
-      "retryDelay": 1000,
-      "maxRetries": 20,
-      "timeout": 60000
-    },
-    "Filesystem_MCP": {
-      "url": "http://localhost:8092/mcp",
-      "retryDelay": 1000,
-      "maxRetries": 20,
-      "timeout": 60000
-    },
-    "Database_MCP": {
-      "url": "http://localhost:8093/mcp",
-      "retryDelay": 1000,
-      "maxRetries": 20,
-      "timeout": 60000
-    }
-  }
-}
-```
-
-## 📊 Connection Mode Comparison
-
-| Feature                | Command-Based  | HTTP Mode         |
-| ---------------------- | -------------- | ----------------- |
-| **SSH Stability**      | ✅ Excellent    | ⚠️ May timeout    |
-| **Connection Drops**   | ✅ None         | ⚠️ Can occur      |
-| **Setup Complexity**   | ⚠️ More config | ✅ Simple          |
-| **Performance**        | ✅ Optimal      | ✅ Good            |
-| **Local Development**  | ✅ Works        | ✅ Works           |
-| **Remote Development** | ✅ Recommended  | ❌ Not recommended |
-
-## 🛠️ Usage Examples
-
-### Browser Automation with Playwright
-
-```javascript
-// Navigate to a website
-await browser.navigate({ url: "https://example.com" });
-
-// Take a screenshot
-await browser.take_screenshot({ 
-  filename: "screenshot.png",
-  fullPage: true 
-});
-
-// Fill a form field (IMPORTANT: Click the field first before typing)
-await browser.click({ 
-  element: "Username textbox", 
-  ref: "ref-username-field" 
-});
-await browser.type({ 
-  element: "Username textbox", 
-  ref: "ref-username-field",
-  text: "myuser" 
-});
-
-// Note: For form inputs, you must click the field first to focus it before typing.
-// This is a known requirement for reliable form field interaction.
-```
-
-### File Operations with Filesystem
-
-```javascript
-// Read a file
-const content = await filesystem.readFile({ path: "config.json" });
-
-// Write a file
-await filesystem.writeFile({ 
-  path: "output.txt", 
-  content: "Hello, World!" 
-});
-
-// List directory contents
-const files = await filesystem.listDir({ path: "/workspace" });
-```
-
-### Database Operations
-
-```javascript
-// Execute a query on the default database
-const results = await database.query({ 
-  sql: "SELECT * FROM users WHERE active = true" 
-});
-
-// Insert data
-await database.execute({ 
-  sql: "INSERT INTO logs (message, timestamp) VALUES (?, ?)",
-  params: ["User logged in", new Date().toISOString()]
-});
-
-// Connect to a database in your workspace
-await database.connect({
-  connection_name: "workspace_db",
-  database: "/workspace/myproject/database.db"
-});
-
-// Execute queries on workspace database
-const workspaceResults = await database.execute_query({
-  connection_name: "workspace_db",
-  query: "SELECT * FROM projects WHERE status = 'active'"
-});
-```
-
-## 🔧 Configuration
-
-### Environment Variables
+Open `docker-compose.yml` and uncomment the servers you want. For example, to enable Playwright, Filesystem, and Memory:
 
 ```yaml
-# docker-compose.yml
 environment:
   - PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-  - NODE_ENV=production
+  - PLAYWRIGHT_CHROME_CHANNEL=chrome
+  - PLAYWRIGHT_HEADLESS=true
+  - ENABLE_PLAYWRIGHT=true
+  - ENABLE_FILESYSTEM=true
+  - ENABLE_MEMORY=true
 ```
 
-### Port Mapping
+That's it. Those three servers will start when the container comes up. Everything else stays off.
+
+### 3. Build and start
+
+```bash
+docker compose up -d --build
+```
+
+The first build takes a few minutes (it's installing browsers, npm packages, and Python). Subsequent starts are fast.
+
+### 4. Verify it's running
+
+```bash
+curl http://localhost:8080/health
+```
+
+You should get back something like:
+
+```json
+{
+  "status": "healthy",
+  "service": "MCP Gateway",
+  "activeMcps": ["playwright", "filesystem", "memory"],
+  "endpoints": ["/playwright", "/filesystem", "/memory"]
+}
+```
+
+### 5. Point your AI agent at it
+
+In Cursor, VS Code, or whatever MCP-compatible client you use, add the servers:
+
+```json
+{
+  "mcpServers": {
+    "Playwright_MCP": {
+      "url": "http://localhost:8080/playwright"
+    },
+    "Filesystem_MCP": {
+      "url": "http://localhost:8080/filesystem"
+    },
+    "Memory_MCP": {
+      "url": "http://localhost:8080/memory"
+    }
+  }
+}
+```
+
+Replace `localhost` with your server's IP address if you're connecting remotely. A full example with all eleven servers is in `cursor-mcp-config.json`.
+
+---
+
+## Configuration Reference
+
+### Enabling servers
+
+Every server is controlled by a single environment variable. Some servers need additional configuration (API keys, URLs). Set these in the `environment` section of your `docker-compose.yml`:
+
+| Server | Enable With | Additional Config |
+|--------|------------|-------------------|
+| Playwright | `ENABLE_PLAYWRIGHT=true` | -- |
+| Filesystem | `ENABLE_FILESYSTEM=true` | -- |
+| Sequential Thinking | `ENABLE_SEQUENTIAL_THINKING=true` | -- |
+| Memory | `ENABLE_MEMORY=true` | `MEMORY_FILE_PATH` (optional, defaults to `/data/memory.jsonl`) |
+| GitHub | `ENABLE_GITHUB=true` | `GITHUB_PERSONAL_ACCESS_TOKEN` (required) |
+| SearXNG | `ENABLE_SEARXNG=true` | `SEARXNG_SERVER_URL` (required, e.g. `http://searxng:8080`) |
+| Context7 | `ENABLE_CONTEXT7=true` | `CONTEXT7_API_KEY` (optional, for higher rate limits) |
+| Python Interpreter | `ENABLE_PYTHON_INTERPRETER=true` | -- |
+| YouTube Transcriber | `ENABLE_YOUTUBE_TRANSCRIBER=true` | `FIREWORKS_API_KEY` (required) |
+| Fetch | `ENABLE_FETCH=true` | -- |
+| Git | `ENABLE_GIT=true` | -- |
+
+If you enable a server that requires an API key but don't provide one, the startup script will log a warning and skip that server. Nothing crashes.
+
+**Note on SearXNG:** The `docker-compose.yml` includes a bundled SearXNG instance as a second service. It starts automatically alongside the gateway on the same Docker network. When you enable SearXNG, set `SEARXNG_SERVER_URL=http://searxng:8080` and it will connect to the bundled instance. If you already run your own SearXNG elsewhere, point the URL there instead and remove the `searxng` service from the compose file.
+
+**Note on Context7:** Context7 works without an API key, but with lower rate limits. The MCP server runs locally but connects to Context7's hosted backend for documentation data. You can get a free API key at [context7.com](https://context7.com) for higher rate limits -- the backend itself is not self-hostable.
+
+### Full configuration example
+
+Here's what it looks like with everything turned on:
 
 ```yaml
-ports:
-  - "8091:8081"  # Playwright MCP
-  - "8092:8082"  # Filesystem MCP
-  - "8093:8083"  # Database MCP
+environment:
+  - PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+  - PLAYWRIGHT_CHROME_CHANNEL=chrome
+  - PLAYWRIGHT_HEADLESS=true
+  # Core servers
+  - ENABLE_PLAYWRIGHT=true
+  - ENABLE_FILESYSTEM=true
+  - ENABLE_SEQUENTIAL_THINKING=true
+  - ENABLE_MEMORY=true
+  - ENABLE_PYTHON_INTERPRETER=true
+  # GitHub
+  - ENABLE_GITHUB=true
+  - GITHUB_PERSONAL_ACCESS_TOKEN=ghp_your_token_here
+  # Web search
+  - ENABLE_SEARXNG=true
+  - SEARXNG_SERVER_URL=http://searxng:8080
+  # Documentation lookup
+  - ENABLE_CONTEXT7=true
+  - CONTEXT7_API_KEY=your_key_here
+  # YouTube transcription
+  - ENABLE_YOUTUBE_TRANSCRIBER=true
+  - FIREWORKS_API_KEY=your_fireworks_key_here
+  # Web fetching and local git
+  - ENABLE_FETCH=true
+  - ENABLE_GIT=true
 ```
 
-### Volume Mounts
+### Volumes
 
 ```yaml
 volumes:
-  - /workspace:/workspace:rw  # Local filesystem workspace access
-  - data:/data:rw            # Database storage (persistent volume)
+  - /workspace:/workspace:rw   # Your project files (used by Filesystem MCP)
+  - data:/data:rw              # Persistent storage (Memory MCP stores data here)
 ```
 
-The workspace volume provides direct access to your local filesystem workspace, allowing both the Filesystem MCP and Database MCP to access files and databases within your development environment. The data volume persists database files across container restarts.
+### Ports
 
-### Database MCP Workspace Access
+Only one port is exposed:
 
-The Database MCP is configured with `--allowed-directories /workspace` to enable access to databases stored within your workspace directory. This is essential for:
+```yaml
+ports:
+  - "8080:8080"
+```
 
-- **Development Databases**: Access SQLite databases in your project directories
-- **Database Scripts**: Execute SQL files located in your workspace
-- **Schema Files**: Read database schema definitions and migration scripts
-- **Test Data**: Access test databases and fixtures in your project structure
-- **Configuration**: Read database configuration files from your workspace
+If port 8080 is taken on your host, change the left side: `"9090:8080"` will make the gateway available at port 9090.
 
-This configuration allows the Database MCP to work seamlessly with databases that are part of your development workflow, not just the persistent `/data` volume.
+---
 
-## 🔍 Troubleshooting
+## Gateway Endpoints
 
-### Container Health
+| URL | What It Does |
+|-----|--------------|
+| `GET /` | Index page listing all active servers and their URLs |
+| `GET /health` | JSON health check with the list of active servers |
+| `/<server-name>` | MCP Streamable HTTP endpoint for that server |
+
+The server names match exactly what you see in the table above: `playwright`, `filesystem`, `sequential-thinking`, `memory`, `github`, `searxng`, `context7`, `python-interpreter`, `youtube-transcriber`, `fetch`, `git`.
+
+---
+
+## Alternative: Docker Exec Mode
+
+Every MCP package is installed globally in the container, so you can also connect to them directly via `docker exec` using stdio transport. This is useful for debugging or if your MCP client prefers stdio over HTTP:
 
 ```bash
-# Check container status
-docker ps | grep 3AmigosMCP
-
-# View logs
-docker logs 3AmigosMCP
-
-# Health check
-docker inspect --format='{{.State.Health.Status}}' 3AmigosMCP
-
-# Test all MCPs
-./test-mcps.sh
+docker exec -i SuperMCP npx @playwright/mcp@latest --headless --isolated --no-sandbox --browser chrome
+docker exec -i SuperMCP npx @modelcontextprotocol/server-filesystem /workspace
+docker exec -i SuperMCP npx @modelcontextprotocol/server-memory
+docker exec -i SuperMCP npx @modelcontextprotocol/server-sequential-thinking
+docker exec -i SuperMCP npx @modelcontextprotocol/server-github
+docker exec -i SuperMCP python3.11 -m mcp_server_fetch
+docker exec -i SuperMCP python3.11 -m mcp_server_git --repository /workspace
 ```
 
-### Common Issues
+This works regardless of which servers are enabled via environment variables -- the packages are always there.
 
-#### Connection Drops (SSH/Remote)
+---
 
-* **Solution**: Switch to command-based mode
-* **Why**: Eliminates persistent HTTP connections that can timeout
+## Troubleshooting
 
-#### Container Won't Start
+**The health check says no servers are active**
+You haven't uncommented any `ENABLE_*` lines in `docker-compose.yml`. Uncomment the ones you want, then restart: `docker compose up -d`.
 
-* **Check**: Port 8091-8093 availability
-* **Fix**: `docker compose down && docker compose up -d`
+**A specific server returns 502**
+The backend is probably still starting up. Give it 10-15 seconds after container start, then try again. If it persists, check that server's log:
 
-#### MCP Tools Not Available
+```bash
+docker exec SuperMCP cat /var/log/mcp/playwright.log
+docker exec SuperMCP cat /var/log/mcp/memory.log
+```
 
-* **Check**: Client configuration
-* **Verify**: Container is healthy and running
-* **Test**: Run `./test-mcps.sh` to verify all MCPs
+**GitHub or SearXNG won't start**
+These require additional environment variables. Make sure you've set both the `ENABLE_*` flag and the required key/URL. The container logs will show a warning if a required variable is missing:
 
-#### Form Field Input Not Working
+```bash
+docker logs SuperMCP | head -30
+```
 
-* **Issue**: `browser_type` fails with "Element not found" error
-* **Solution**: **Click the form field first** before typing to focus it
-* **Example**:
-  ```javascript
-  // Step 1: Click to focus the field
-  await browser.click({ element: "Username field", ref: "ref-username" });
-  // Step 2: Then type
-  await browser.type({ element: "Username field", ref: "ref-username", text: "admin" });
-  ```
-* **Why**: Form fields need to be focused before text input can be reliably entered
-* **Note**: This is a known requirement for reliable form field interaction with Playwright MCP
+**Container won't start at all**
+Check that port 8080 is free and the Docker network exists:
 
-#### Material-UI TextField Components Not Working
+```bash
+docker network create Network-Bridge    # if it doesn't exist
+docker compose down
+docker compose build --no-cache
+docker compose up -d
+```
 
-* **Issue**: Cannot type into Material-UI TextField components even after clicking
-* **Root Cause**: Material-UI TextFields have a complex nested DOM structure where the actual `<input>` element is nested inside multiple wrapper divs. Playwright MCP uses the accessibility tree to interact with elements, which may point to the wrapper div instead of the actual input element.
-* **Status**: **Known Limitation** - This is a fundamental incompatibility between Playwright MCP's accessibility tree approach and Material-UI's component structure.
-* **Workarounds**:
-  * **Option 1 (Recommended)**: Replace Material-UI TextField components with standard HTML `<input>` elements or simpler form libraries
-  * **Option 2**: Use native HTML inputs wrapped in Material-UI styling instead of TextField components
-  * **Option 3**: Wait for Playwright MCP to add support for nested input elements in complex component libraries
-* **Why This Happens**: The accessibility tree identifies the TextField wrapper as the interactive element, but the actual input handling requires interaction with the nested `<input>` element, which the MCP cannot reliably locate.
+**General debugging**
 
-## 📈 Performance
+```bash
+docker ps | grep SuperMCP                                             # is it running?
+docker inspect --format='{{.State.Health.Status}}' SuperMCP           # is it healthy?
+docker logs SuperMCP                                                   # what happened on startup?
+curl http://localhost:8080/health                                     # what does the gateway say?
+```
 
-### Resource Usage
+---
 
-* **Memory**: ~300MB typical usage
-* **CPU**: Low usage during idle
-* **Network**: Minimal overhead
-
-### Optimization Tips
-
-* Use `--headless` mode for Playwright automation
-* Enable `--isolated` for clean browser sessions
-* Monitor resource usage with `docker stats`
-
-## 🎯 Why These Three MCPs?
-
-The combination of Playwright, Filesystem, and Database MCPs covers the most common development scenarios:
-
-1. **Web Development**: Playwright handles browser automation, testing, and web scraping
-2. **File Management**: Filesystem MCP provides workspace organization and file operations
-3. **Data Operations**: Database MCP enables data persistence, queries, and analysis
-
-Together, they create a comprehensive development environment that can handle everything from simple scripts to complex web applications.
-
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Test thoroughly with `./test-mcps.sh`
-5. Submit a pull request
+4. Submit a pull request
 
-## 📄 License
+Adding a new MCP server involves four files: `Dockerfile` (install the package), `start-mcps.sh` (add the launch block), `gateway.js` (add to the registry), and `docker-compose.yml` (add the env var). The pattern is the same for every server.
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+## License
 
-## 🙏 Acknowledgments
+MIT License -- see the LICENSE file for details.
 
-* Playwright for the amazing browser automation framework
-* Model Context Protocol for the MCP specification
-* The Cursor/VS Code community for MCP integration
-* The MCP ecosystem for providing these powerful tools
+## Acknowledgments
 
----
-
-**Ready to supercharge your development workflow?** 🚀
-
-The Three Amigos bring together browser automation, file management, and database operations into one seamless container. Whether you're building web applications, managing data, or automating workflows, these MCPs provide the tools you need right in your editor.
-
-## About
-
-A comprehensive Docker container combining Playwright, Filesystem, and Database MCP servers for enhanced development workflows.
+- [Model Context Protocol](https://modelcontextprotocol.io/) for the specification that makes all of this possible
+- [supergateway](https://www.npmjs.com/package/supergateway) for the stdio-to-HTTP bridge that ties everything together
+- [Playwright](https://playwright.dev/) for browser automation
+- The MCP community for building and maintaining these server packages
