@@ -97,7 +97,7 @@ app.get('/', (req, res) => {
       '  ENABLE_SEARXNG=true         (requires SEARXNG_SERVER_URL)\n' +
       '  ENABLE_CONTEXT7=true        (optional: CONTEXT7_API_KEY)\n' +
       '  ENABLE_PYTHON_INTERPRETER=true\n' +
-      '  ENABLE_YOUTUBE_TRANSCRIBER=true (requires FIREWORKS_API_KEY)\n' +
+      '  ENABLE_YOUTUBE_TRANSCRIBER=true (requires TRANSCRIBER_API_KEY)\n' +
       '  ENABLE_FETCH=true\n' +
       '  ENABLE_GIT=true\n\n' +
       'Health check: /health\n'
@@ -119,7 +119,7 @@ for (const [name, config] of Object.entries(activeMcps)) {
     target: `http://localhost:${config.port}`,
     changeOrigin: true,
     // Rewrite /<mcpname> to /mcp (supergateway serves at /mcp)
-    pathRewrite: { [`^/${name}`]: '/mcp' },
+    pathRewrite: { '^/': '/mcp' },
     // Timeout settings
     proxyTimeout: 120000,
     timeout: 120000,

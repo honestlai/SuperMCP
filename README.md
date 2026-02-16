@@ -149,20 +149,22 @@ In Cursor, VS Code, or whatever MCP-compatible client you use, add the servers:
 ```json
 {
   "mcpServers": {
-    "Playwright_MCP": {
+    "SuperMCP_Playwright": {
       "url": "http://localhost:8080/playwright"
     },
-    "Filesystem_MCP": {
+    "SuperMCP_Filesystem": {
       "url": "http://localhost:8080/filesystem"
     },
-    "Memory_MCP": {
+    "SuperMCP_Memory": {
       "url": "http://localhost:8080/memory"
     }
   }
 }
 ```
 
-Replace `localhost` with your server's IP address if you're connecting remotely. A full example with all eleven servers is in `cursor-mcp-config.json`.
+**Important:** Use unique names like `SuperMCP_Playwright` instead of generic names like `playwright` or `filesystem`. Some MCP clients (including Cursor) may recognize generic names and attempt to run the server locally via stdio instead of connecting to your remote URL. Prefixing with `SuperMCP_` avoids this.
+
+Replace `localhost` with your server's IP address if you're connecting remotely. Do **not** add trailing slashes to the URLs. A full example with all eleven servers is in `cursor-mcp-config.json`.
 
 ---
 
@@ -188,7 +190,7 @@ In your Cursor / VS Code MCP config, add a `headers` block to each server:
 ```json
 {
   "mcpServers": {
-    "Playwright_MCP": {
+    "SuperMCP_Playwright": {
       "url": "http://your-server:8080/playwright",
       "headers": {
         "Authorization": "Bearer my-secret-key-here"
@@ -216,13 +218,15 @@ Every server is controlled by a single environment variable. Some servers need a
 | Python Interpreter | `ENABLE_PYTHON_INTERPRETER=true` | -- |
 | YouTube Transcriber | `ENABLE_YOUTUBE_TRANSCRIBER=true` | `TRANSCRIBER_API_KEY` + `TRANSCRIBER_PROVIDER` (see [YouTube Transcriber config](#youtube-transcriber-configuration)) |
 | Fetch | `ENABLE_FETCH=true` | -- |
-| Git | `ENABLE_GIT=true` | -- |
+| Git | `ENABLE_GIT=true` | Requires `/workspace` to be a git repository |
 
 If you enable a server that requires an API key but don't provide one, the startup script will log a warning and skip that server. Nothing crashes.
 
-**Note on SearXNG:** The `docker-compose.yml` includes a bundled SearXNG instance as a second service. It starts automatically alongside the gateway on the same Docker network. When you enable SearXNG, set `SEARXNG_SERVER_URL=http://searxng:8080` and it will connect to the bundled instance. If you already run your own SearXNG elsewhere, point the URL there instead and remove the `searxng` service from the compose file.
+**Note on SearXNG:** The `docker-compose.yml` includes a bundled SearXNG instance with a Valkey cache as companion services. They start automatically alongside the gateway on the same Docker network. When you enable SearXNG, set `SEARXNG_SERVER_URL=http://searxng:8080` and it will connect to the bundled instance. If you already run your own SearXNG elsewhere, point the URL there instead and remove the `searxng` and `valkey` services from the compose file.
 
 **Note on Context7:** Context7 works without an API key, but with lower rate limits. The MCP server runs locally but connects to Context7's hosted backend for documentation data. You can get a free API key at [context7.com](https://context7.com) for higher rate limits -- the backend itself is not self-hostable.
+
+**Note on Git:** The Git MCP requires `/workspace` to contain an initialized git repository. If the workspace volume is empty or doesn't contain a `.git` directory, the Git MCP will fail to respond. Clone or init a repo in the workspace first, or skip enabling this server if you don't need it.
 
 ### YouTube Transcriber configuration
 

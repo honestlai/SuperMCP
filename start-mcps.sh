@@ -82,6 +82,8 @@ if [ "${ENABLE_SEARXNG}" = "true" ]; then
     if [ -z "${SEARXNG_SERVER_URL}" ]; then
         echo "[!] WARNING: ENABLE_SEARXNG=true but SEARXNG_SERVER_URL is not set. Skipping."
     else
+        # mcp-searxng expects SEARXNG_URL, translate from our config variable
+        export SEARXNG_URL="${SEARXNG_SERVER_URL}"
         start_mcp "searxng" 8086 \
             "npx -y mcp-searxng"
         STARTED=$((STARTED + 1))

@@ -1,67 +1,67 @@
 {
-  "_comment": "If GATEWAY_API_KEY is set, add the 'headers' block to each server below.",
+  "_comment": "Example Cursor MCP config. If GATEWAY_API_KEY is set, keep the 'headers' blocks. Otherwise, remove them. Replace localhost with your server's IP for remote access.",
   "mcpServers": {
-    "Playwright_MCP": {
+    "SuperMCP_Playwright": {
       "url": "http://localhost:8080/playwright",
       "headers": {
         "Authorization": "Bearer your_secret_key_here"
       }
     },
-    "Filesystem_MCP": {
+    "SuperMCP_Filesystem": {
       "url": "http://localhost:8080/filesystem",
       "headers": {
         "Authorization": "Bearer your_secret_key_here"
       }
     },
-    "Sequential_Thinking_MCP": {
+    "SuperMCP_SequentialThinking": {
       "url": "http://localhost:8080/sequential-thinking",
       "headers": {
         "Authorization": "Bearer your_secret_key_here"
       }
     },
-    "Memory_MCP": {
+    "SuperMCP_Memory": {
       "url": "http://localhost:8080/memory",
       "headers": {
         "Authorization": "Bearer your_secret_key_here"
       }
     },
-    "GitHub_MCP": {
+    "SuperMCP_GitHub": {
       "url": "http://localhost:8080/github",
       "headers": {
         "Authorization": "Bearer your_secret_key_here"
       }
     },
-    "SearXNG_MCP": {
+    "SuperMCP_SearXNG": {
       "url": "http://localhost:8080/searxng",
       "headers": {
         "Authorization": "Bearer your_secret_key_here"
       }
     },
-    "Context7_MCP": {
+    "SuperMCP_Context7": {
       "url": "http://localhost:8080/context7",
       "headers": {
         "Authorization": "Bearer your_secret_key_here"
       }
     },
-    "Python_Interpreter_MCP": {
+    "SuperMCP_PythonInterpreter": {
       "url": "http://localhost:8080/python-interpreter",
       "headers": {
         "Authorization": "Bearer your_secret_key_here"
       }
     },
-    "YouTube_Transcriber_MCP": {
+    "SuperMCP_YouTubeTranscriber": {
       "url": "http://localhost:8080/youtube-transcriber",
       "headers": {
         "Authorization": "Bearer your_secret_key_here"
       }
     },
-    "Fetch_MCP": {
+    "SuperMCP_Fetch": {
       "url": "http://localhost:8080/fetch",
       "headers": {
         "Authorization": "Bearer your_secret_key_here"
       }
     },
-    "Git_MCP": {
+    "SuperMCP_Git": {
       "url": "http://localhost:8080/git",
       "headers": {
         "Authorization": "Bearer your_secret_key_here"
