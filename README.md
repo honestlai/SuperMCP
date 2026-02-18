@@ -166,6 +166,95 @@ In Cursor, VS Code, or whatever MCP-compatible client you use, add the servers:
 
 Replace `localhost` with your server's IP address if you're connecting remotely. Do **not** add trailing slashes to the URLs. A full example with all eleven servers is in `cursor-mcp-config.json`.
 
+### Claude Desktop (Claude App)
+
+Claude Desktop does not support remote HTTP MCP servers directly; it expects stdio-based servers. To use SuperMCP with Claude App, run **mcp-proxy** locally so it bridges stdio to your gateway’s Streamable HTTP endpoints.
+
+**1. Install mcp-proxy** (one-time):
+
+```bash
+pip install mcp-proxy
+# or: uvx mcp-proxy (no install, runs on demand)
+```
+
+**2. Locate your Claude config file:**
+
+- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+- **Linux:** `~/.config/Claude/claude_desktop_config.json`
+
+You can also open it from Claude Desktop: **Settings → Developer → Edit Config**.
+
+**3. Add SuperMCP via mcp-proxy (no API key):**
+
+Each MCP endpoint is a separate “server” entry. Replace `http://localhost:8080` with your gateway URL (e.g. `http://10.100.100.13:8080`) if connecting to a remote host.
+
+```json
+{
+  "mcpServers": {
+    "SuperMCP_Filesystem": {
+      "command": "uvx",
+      "args": [
+        "mcp-proxy",
+        "--transport", "streamablehttp",
+        "http://localhost:8080/filesystem"
+      ]
+    },
+    "SuperMCP_Memory": {
+      "command": "uvx",
+      "args": [
+        "mcp-proxy",
+        "--transport", "streamablehttp",
+        "http://localhost:8080/memory"
+      ]
+    },
+    "SuperMCP_Playwright": {
+      "command": "uvx",
+      "args": [
+        "mcp-proxy",
+        "--transport", "streamablehttp",
+        "http://localhost:8080/playwright"
+      ]
+    }
+  }
+}
+```
+
+**4. With API key (gateway protected by `GATEWAY_API_KEY`):**
+
+Pass your gateway API key so mcp-proxy can send it as a Bearer token. Use the `env` block with `API_ACCESS_TOKEN` (mcp-proxy sends it as `Authorization: Bearer <token>`):
+
+```json
+{
+  "mcpServers": {
+    "SuperMCP_Filesystem": {
+      "command": "uvx",
+      "args": [
+        "mcp-proxy",
+        "--transport", "streamablehttp",
+        "http://your-server:8080/filesystem"
+      ],
+      "env": {
+        "API_ACCESS_TOKEN": "my-secret-key-here"
+      }
+    },
+    "SuperMCP_Memory": {
+      "command": "uvx",
+      "args": [
+        "mcp-proxy",
+        "--transport", "streamablehttp",
+        "http://your-server:8080/memory"
+      ],
+      "env": {
+        "API_ACCESS_TOKEN": "my-secret-key-here"
+      }
+    }
+  }
+}
+```
+
+Use the same `API_ACCESS_TOKEN` value as the `GATEWAY_API_KEY` you set in `docker-compose.yml`. After editing the config, fully restart Claude Desktop (quit and reopen) so the new MCP servers load.
+
 ---
 
 ## Configuration Reference
@@ -201,6 +290,9 @@ In your Cursor / VS Code MCP config, add a `headers` block to each server:
 ```
 
 Requests without a valid token receive a `401 Unauthorized` response. The `/health` endpoint remains open so Docker healthchecks continue to work. If `GATEWAY_API_KEY` is not set, the gateway runs open with no authentication (fine for local-only use).
+
+- **Cursor / VS Code:** use the `headers` block with `Authorization: Bearer <key>` as in the example above.
+- **Claude Desktop:** use mcp-proxy and set `API_ACCESS_TOKEN` in the `env` block for each server (see [Claude Desktop (Claude App)](#claude-desktop-claude-app)).
 
 ### Enabling servers
 
