@@ -83,7 +83,11 @@ Your AI Agent
  └────────────────────────────────────────────────────┘
 ```
 
-On startup, the container reads your environment variables, launches only the servers you've enabled, and starts the gateway. If you haven't enabled anything, the gateway still runs -- it just serves a helpful index page telling you how to turn things on.
+On startup, the container reads your environment variables, launches only the servers you've enabled, and waits until every backend is actually accepting connections before starting the gateway. This prevents the proxy errors that would otherwise occur if the gateway raced ahead of a slow-starting MCP server. A background watchdog then monitors each backend and automatically restarts any that die, so a single crashed server doesn't leave its endpoint permanently broken.
+
+Each Node.js process is capped at a 256 MB heap (`NODE_OPTIONS=--max-old-space-size=256`) to reduce memory pressure when many servers are running simultaneously.
+
+If you haven't enabled anything, the gateway still runs -- it just serves a helpful index page telling you how to turn things on.
 
 ---
 
@@ -108,8 +112,6 @@ Open `docker-compose.yml` and uncomment the servers you want. For example, to en
 ```yaml
 environment:
   - PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-  - PLAYWRIGHT_CHROME_CHANNEL=chrome
-  - PLAYWRIGHT_HEADLESS=true
   - ENABLE_PLAYWRIGHT=true
   - ENABLE_FILESYSTEM=true
   - ENABLE_MEMORY=true
@@ -168,16 +170,9 @@ Replace `localhost` with your server's IP address if you're connecting remotely.
 
 ### Claude Desktop (Claude App)
 
-Claude Desktop does not support remote HTTP MCP servers directly; it expects stdio-based servers. To use SuperMCP with Claude App, run **mcp-proxy** locally so it bridges stdio to your gateway’s Streamable HTTP endpoints.
+Claude Desktop does not support remote HTTP MCP servers directly; it expects stdio-based servers. Use a local bridge (mcp-proxy or an npm adapter) so Claude talks stdio and the bridge talks Streamable HTTP to your gateway.
 
-**1. Install mcp-proxy** (one-time):
-
-```bash
-pip install mcp-proxy
-# or: uvx mcp-proxy (no install, runs on demand)
-```
-
-**2. Locate your Claude config file:**
+**Config file location:** [MCP Debugging guide](https://modelcontextprotocol.io/legacy/tools/debugging) recommends using **absolute paths** for `command`, because Claude may be started from anywhere and the working directory can be undefined.
 
 - **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
 - **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
@@ -185,75 +180,110 @@ pip install mcp-proxy
 
 You can also open it from Claude Desktop: **Settings → Developer → Edit Config**.
 
-**3. Add SuperMCP via mcp-proxy (no API key):**
+---
 
-Each MCP endpoint is a separate “server” entry. Replace `http://localhost:8080` with your gateway URL (e.g. `http://10.100.100.13:8080`) if connecting to a remote host.
+**Option A: Python 3 + pip (no uv/uvx)** — works on any system with Python 3.
+
+1. Install the bridge once:
+
+   ```bash
+   pip install mcp-proxy
+   # or: pip3 install mcp-proxy
+   ```
+
+2. Find the full path to `python3` (use this in config so Claude finds it even with a minimal PATH):
+
+   ```bash
+   which python3
+   # e.g. /opt/homebrew/bin/python3 or /usr/bin/python3
+   ```
+
+3. In `claude_desktop_config.json`, use that path as `command` and run mcp-proxy as a module:
+
+   **Without API key:**
+
+   ```json
+   {
+     "mcpServers": {
+       "SuperMCP_Memory": {
+         "command": "/opt/homebrew/bin/python3",
+         "args": [
+           "-m", "mcp_proxy",
+           "--transport", "streamablehttp",
+           "https://your-gateway.example.com/memory"
+         ]
+       }
+     }
+   }
+   ```
+
+   **With API key** (when `GATEWAY_API_KEY` is set on the gateway), add `env` with `API_ACCESS_TOKEN` (mcp-proxy sends it as `Authorization: Bearer <token>`):
+
+   ```json
+   {
+     "mcpServers": {
+       "SuperMCP_Memory": {
+         "command": "/opt/homebrew/bin/python3",
+         "args": [
+           "-m", "mcp_proxy",
+           "--transport", "streamablehttp",
+           "https://your-gateway.example.com/memory"
+         ],
+         "env": {
+           "API_ACCESS_TOKEN": "your-gateway-api-key-here"
+         }
+       }
+     }
+   }
+   ```
+
+   Use your actual `python3` path (e.g. `/usr/bin/python3` on Linux) and replace `https://your-gateway.example.com` with your SuperMCP base URL. Use the same value for `API_ACCESS_TOKEN` as `GATEWAY_API_KEY` in docker-compose.
+
+---
+
+**Option B: uvx** (if you already use [uv](https://github.com/astral-sh/uv)):
+
+Use the **full path** to `uvx` so Claude can spawn it (e.g. `/opt/homebrew/bin/uvx` on macOS):
 
 ```json
 {
   "mcpServers": {
-    "SuperMCP_Filesystem": {
-      "command": "uvx",
-      "args": [
-        "mcp-proxy",
-        "--transport", "streamablehttp",
-        "http://localhost:8080/filesystem"
-      ]
-    },
     "SuperMCP_Memory": {
-      "command": "uvx",
-      "args": [
-        "mcp-proxy",
-        "--transport", "streamablehttp",
-        "http://localhost:8080/memory"
-      ]
-    },
-    "SuperMCP_Playwright": {
-      "command": "uvx",
-      "args": [
-        "mcp-proxy",
-        "--transport", "streamablehttp",
-        "http://localhost:8080/playwright"
-      ]
+      "command": "/opt/homebrew/bin/uvx",
+      "args": ["mcp-proxy", "--transport", "streamablehttp", "https://your-gateway.example.com/memory"],
+      "env": { "API_ACCESS_TOKEN": "your-gateway-api-key-here" }
     }
   }
 }
 ```
 
-**4. With API key (gateway protected by `GATEWAY_API_KEY`):**
+---
 
-Pass your gateway API key so mcp-proxy can send it as a Bearer token. Use the `env` block with `API_ACCESS_TOKEN` (mcp-proxy sends it as `Authorization: Bearer <token>`):
+**Option C: Node.js (npx)** — alternative bridge that uses env vars for URL and token.
+
+Install not required; npx runs it on demand. Prefer a **full path** to `npx` (e.g. `/opt/homebrew/bin/npx`) if you see “No such file or directory” when Claude starts the server.
+
+- **URI** (required): your SuperMCP endpoint URL  
+- **BEARER_TOKEN** (optional): same as your gateway `GATEWAY_API_KEY`
 
 ```json
 {
   "mcpServers": {
-    "SuperMCP_Filesystem": {
-      "command": "uvx",
-      "args": [
-        "mcp-proxy",
-        "--transport", "streamablehttp",
-        "http://your-server:8080/filesystem"
-      ],
-      "env": {
-        "API_ACCESS_TOKEN": "my-secret-key-here"
-      }
-    },
     "SuperMCP_Memory": {
-      "command": "uvx",
-      "args": [
-        "mcp-proxy",
-        "--transport", "streamablehttp",
-        "http://your-server:8080/memory"
-      ],
+      "command": "/opt/homebrew/bin/npx",
+      "args": ["-y", "@pyroprompts/mcp-stdio-to-streamable-http-adapter"],
       "env": {
-        "API_ACCESS_TOKEN": "my-secret-key-here"
+        "URI": "https://your-gateway.example.com/memory",
+        "BEARER_TOKEN": "your-gateway-api-key-here"
       }
     }
   }
 }
 ```
 
-Use the same `API_ACCESS_TOKEN` value as the `GATEWAY_API_KEY` you set in `docker-compose.yml`. After editing the config, fully restart Claude Desktop (quit and reopen) so the new MCP servers load.
+---
+
+**Troubleshooting:** If logs show `Failed to spawn process: No such file or directory`, Claude is not finding the executable. Use the **absolute path** for `command` (e.g. `/opt/homebrew/bin/python3`, `/usr/bin/python3`, or `/opt/homebrew/bin/npx`) instead of `python3` or `uvx`. See the [MCP Debugging guide](https://modelcontextprotocol.io/legacy/tools/debugging) for more. After config changes, fully quit and reopen Claude Desktop.
 
 ---
 
@@ -396,8 +426,6 @@ Here's what it looks like with everything turned on:
 ```yaml
 environment:
   - PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-  - PLAYWRIGHT_CHROME_CHANNEL=chrome
-  - PLAYWRIGHT_HEADLESS=true
   # Core servers
   - ENABLE_PLAYWRIGHT=true
   - ENABLE_FILESYSTEM=true
@@ -460,7 +488,7 @@ The server names match exactly what you see in the table above: `playwright`, `f
 Every MCP package is installed globally in the container, so you can also connect to them directly via `docker exec` using stdio transport. This is useful for debugging or if your MCP client prefers stdio over HTTP:
 
 ```bash
-docker exec -i SuperMCP npx @playwright/mcp@latest --headless --isolated --no-sandbox --browser chrome
+docker exec -i SuperMCP npx @playwright/mcp@latest --headless --isolated --no-sandbox --browser chromium
 docker exec -i SuperMCP npx @modelcontextprotocol/server-filesystem /workspace
 docker exec -i SuperMCP npx @modelcontextprotocol/server-memory
 docker exec -i SuperMCP npx @modelcontextprotocol/server-sequential-thinking
@@ -479,7 +507,7 @@ This works regardless of which servers are enabled via environment variables -- 
 You haven't uncommented any `ENABLE_*` lines in `docker-compose.yml`. Uncomment the ones you want, then restart: `docker compose up -d`.
 
 **A specific server returns 502**
-The backend is probably still starting up. Give it 10-15 seconds after container start, then try again. If it persists, check that server's log:
+The backend crashed or is restarting. The watchdog will restart it automatically within 30 seconds. Check that server's log for the underlying error:
 
 ```bash
 docker exec SuperMCP cat /var/log/mcp/playwright.log
