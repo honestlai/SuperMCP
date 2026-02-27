@@ -154,6 +154,7 @@ app.use((req, res) => {
 });
 
 // ── Start server ─────────────────────────────────────────────────────────────
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`MCP Gateway listening on http://0.0.0.0:${PORT}`);
 });
+server.setMaxListeners(20);

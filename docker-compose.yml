@@ -9,8 +9,6 @@ services:
       - data:/data:rw
     environment:
       - PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-      - PLAYWRIGHT_CHROME_CHANNEL=chrome
-      - PLAYWRIGHT_HEADLESS=true
       # ─── API key authentication (optional) ───
       # Set a key here to require Bearer token auth on all MCP endpoints.
       # Clients must send: Authorization: Bearer <your-key>

@@ -2,14 +2,14 @@ FROM mcr.microsoft.com/playwright:v1.50.0-noble
 
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive \
-    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
-    PLAYWRIGHT_CHROME_CHANNEL=chrome
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 # Install base system dependencies + Python extras
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl wget git sqlite3 gnupg ca-certificates \
     software-properties-common ffmpeg \
     python3-pip python3-venv \
+    xvfb \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python packages for MCP servers
