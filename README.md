@@ -42,6 +42,7 @@ The result is a single Docker image that pre-installs all eleven MCP servers at 
 | **YouTube Transcriber** | `/youtube-transcriber` | Downloads YouTube audio and transcribes it using any Whisper-compatible API (OpenAI, Groq, Fireworks, or custom) |
 | **Fetch** | `/fetch` | Fetches any URL and returns the content as clean markdown -- great for reading docs, calling APIs, checking live pages |
 | **Git** | `/git` | Local git operations on your `/workspace` repo -- status, diff, commit, branch, log, checkout, and more |
+| **Video Doc** | `/video-doc` | Processes video recordings (Zoom, Loom, Google Drive, Vimeo, direct mp4) into structured markdown documents with transcript, AI summary, action items, and embedded screenshots |
 
 Every server is an official or well-maintained community MCP package, pre-installed in the image and ready to go. You just decide which ones to turn on.
 
@@ -78,7 +79,8 @@ Your AI Agent
  │     ├── /python-interpreter ──> supergateway (:8088)│
  │     ├── /youtube-transcriber ──> supergateway (:8089)│
  │     ├── /fetch ─────────────> supergateway (:8090)│
- │     └── /git ───────────────> supergateway (:8091)│
+ │     ├── /git ────────────────> supergateway (:8091)│
+ │     └── /video-doc ─────────> supergateway (:8092)│
  │                                                    │
  └────────────────────────────────────────────────────┘
 ```
@@ -341,6 +343,7 @@ Every server is controlled by a single environment variable. Some servers need a
 | YouTube Transcriber | `ENABLE_YOUTUBE_TRANSCRIBER=true` | `TRANSCRIBER_API_KEY` + `TRANSCRIBER_PROVIDER` (see [YouTube Transcriber config](#youtube-transcriber-configuration)) |
 | Fetch | `ENABLE_FETCH=true` | -- |
 | Git | `ENABLE_GIT=true` | Requires `/workspace` to be a git repository |
+| Video Doc | `ENABLE_VIDEO_DOC=true` | `VISION_API_KEY` + `VISION_BASE_URL` + `VISION_MODEL` (see [Video Doc configuration](#video-doc-configuration)); shares `TRANSCRIBER_API_KEY` with YouTube Transcriber |
 
 If you enable a server that requires an API key but don't provide one, the startup script will log a warning and skip that server. Nothing crashes.
 
@@ -419,6 +422,55 @@ The legacy `FIREWORKS_API_KEY` variable still works -- if set without any `TRANS
 - TRANSCRIBER_MODEL=whisper-large-v3
 ```
 
+### Video Doc configuration
+
+The Video Doc MCP downloads a video from a URL (or reads a local file), transcribes the audio, samples keyframes with scene-change detection, analyzes each frame with a vision model, and produces a structured markdown document with summary, action items, and embedded screenshots.
+
+**Input:** any URL supported by yt-dlp (Zoom cloud recordings, Loom shares, Google Drive, Vimeo, direct `.mp4` links, 500+ platforms), or a local file path under `/workspace`.
+
+**Output:** a markdown file written to `/workspace/outputs/`.
+
+#### Environment variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `VISION_API_KEY` | **Yes** | API key for the vision model (use `ollama` for Ollama) |
+| `VISION_BASE_URL` | No | Base URL of the vision API (default: `http://ollama:11434/v1`) |
+| `VISION_MODEL` | No | Vision model name (default: `llava`) |
+| `TRANSCRIBER_API_KEY` | **Yes** | Shared with YouTube Transcriber — API key for Whisper transcription |
+| `TRANSCRIBER_BASE_URL` | No | Shared with YouTube Transcriber — transcription API base URL |
+| `TRANSCRIBER_MODEL` | No | Shared with YouTube Transcriber — Whisper model name |
+
+#### Vision model presets
+
+| Setup | `VISION_BASE_URL` | `VISION_MODEL` | Notes |
+|-------|------------------|----------------|-------|
+| **Ollama (local)** | `http://ollama:11434/v1` | `llava` or `moondream` | Free, runs locally |
+| **OpenAI** | `https://api.openai.com/v1` | `gpt-4o` | Best quality |
+| **OpenAI-compatible** | Any compat endpoint | Model name | Works with any OpenAI-compatible vision API |
+
+#### Example usage (after enabling)
+
+```
+# Zoom cloud recording
+process_video("https://zoom.us/rec/share/xxxx", "meeting")
+
+# Loom recording
+process_video("https://www.loom.com/share/xxxx", "discovery")
+
+# Google Drive video share
+process_video("https://drive.google.com/file/d/xxxx/view", "howto")
+
+# Local file (mount it into the workspace volume first)
+process_video("/workspace/call-recording.mp4", "meeting")
+```
+
+`doc_type` options: `meeting`, `discovery`, `howto`, `general`.
+
+**Private links:** if the URL requires a login, mount a Netscape-format cookies file into the container and set `YTDLP_COOKIES_FILE` to its path.
+
+---
+
 ### Full configuration example
 
 Here's what it looks like with everything turned on:
@@ -448,6 +500,11 @@ environment:
   # Web fetching and local git
   - ENABLE_FETCH=true
   - ENABLE_GIT=true
+  # Video Doc (vision model required — swap for OpenAI if no Ollama)
+  - ENABLE_VIDEO_DOC=true
+  - VISION_BASE_URL=http://ollama:11434/v1
+  - VISION_MODEL=llava
+  - VISION_API_KEY=ollama
 ```
 
 ### Volumes

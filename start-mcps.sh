@@ -190,6 +190,13 @@ if [ "${ENABLE_YOUTUBE_TRANSCRIBER}" = "true" ]; then
     fi
 fi
 
+# ── Video Doc MCP ─────────────────────────────────────────────────────────────
+if [ "${ENABLE_VIDEO_DOC}" = "true" ]; then
+    start_mcp "video-doc" 8092 \
+        "python3 /app/video_doc_mcp.py"
+    STARTED=$((STARTED + 1))
+fi
+
 # ── Fetch MCP ────────────────────────────────────────────────────────────────
 if [ "${ENABLE_FETCH}" = "true" ]; then
     start_mcp "fetch" 8090 \

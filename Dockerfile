@@ -14,7 +14,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install Python packages for MCP servers
 RUN python3 -m pip install --no-cache-dir --break-system-packages \
-    mcp openai yt-dlp mcp-server-fetch mcp-server-git
+    mcp openai yt-dlp mcp-server-fetch mcp-server-git \
+    faster-whisper opencv-python-headless python-docx Pillow
 
 # Install all MCP server packages globally
 # These are installed at build time but only start when enabled via environment variables
@@ -44,6 +45,7 @@ RUN mkdir -p /workspace /data /var/log/mcp /var/run && \
 COPY gateway.js /app/gateway.js
 COPY python-interpreter.mjs /app/python-interpreter.mjs
 COPY youtube_summerizer.py /app/youtube_transcriber.py
+COPY video_doc_mcp.py /app/video_doc_mcp.py
 
 # Copy scripts
 COPY healthcheck.sh /healthcheck.sh

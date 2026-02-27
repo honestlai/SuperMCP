@@ -66,6 +66,12 @@
       "headers": {
         "Authorization": "Bearer your_secret_key_here"
       }
+    },
+    "SuperMCP_VideoDoc": {
+      "url": "http://localhost:8080/video-doc",
+      "headers": {
+        "Authorization": "Bearer your_secret_key_here"
+      }
     }
   }
 }

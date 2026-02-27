@@ -43,6 +43,15 @@ services:
       # ─── Web fetching and local git ───
       # - ENABLE_FETCH=true
       # - ENABLE_GIT=true
+      # ─── Video Doc MCP ───
+      # Processes video recordings (Zoom, Loom, Drive, direct mp4, local files)
+      # into summary docs with embedded screenshots. Requires a vision model.
+      # Default: Ollama + llava (set VISION_BASE_URL to use OpenAI or any compat API)
+      # - ENABLE_VIDEO_DOC=true
+      # - VISION_BASE_URL=http://ollama:11434/v1
+      # - VISION_MODEL=llava
+      # - VISION_API_KEY=ollama
+      # TRANSCRIBER_API_KEY / TRANSCRIBER_PROVIDER are shared with YouTubeTranscriber
     restart: unless-stopped
     networks:
       - Network-Bridge
