@@ -49,12 +49,21 @@ def get_config():
     base_url = os.environ.get("TRANSCRIBER_BASE_URL")
     model = os.environ.get("TRANSCRIBER_MODEL")
 
-    # If no provider is explicitly set, infer from which legacy key exists
+    # Infer provider from explicit keys or unified LLM_BASE_URL
     if not provider and not base_url:
         if os.environ.get("FIREWORKS_API_KEY") and not os.environ.get("TRANSCRIBER_API_KEY"):
             provider = "fireworks"
+        else:
+            # Auto-detect from LLM_BASE_URL so the right default model is applied
+            llm_url = os.environ.get("LLM_BASE_URL", "")
+            if "fireworks.ai" in llm_url:
+                provider = "fireworks"
+            elif "groq.com" in llm_url:
+                provider = "groq"
+            elif "openai.com" in llm_url:
+                provider = "openai"
 
-    # Apply preset defaults (explicit overrides take priority)
+    # Apply preset defaults — explicit TRANSCRIBER_MODEL still overrides
     if provider in PROVIDER_PRESETS:
         preset = PROVIDER_PRESETS[provider]
         base_url = base_url or preset["base_url"]
