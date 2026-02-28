@@ -42,7 +42,7 @@ The result is a single Docker image that pre-installs all eleven MCP servers at 
 | **YouTube Transcriber** | `/youtube-transcriber` | Downloads YouTube audio and transcribes it using any Whisper-compatible API (OpenAI, Groq, Fireworks, or custom) |
 | **Fetch** | `/fetch` | Fetches any URL and returns the content as clean markdown -- great for reading docs, calling APIs, checking live pages |
 | **Git** | `/git` | Local git operations on your `/workspace` repo -- status, diff, commit, branch, log, checkout, and more |
-| **Video Doc** | `/video-doc` | Processes video recordings (Zoom, Loom, Google Drive, Vimeo, direct mp4) into structured markdown documents with transcript, AI summary, action items, and embedded screenshots |
+| **Video2Doc** | `/video2doc` | Processes video recordings (Zoom, Loom, Google Drive, Vimeo, direct mp4) into structured markdown documents with transcript, AI summary, action items, and embedded screenshots |
 
 Every server is an official or well-maintained community MCP package, pre-installed in the image and ready to go. You just decide which ones to turn on.
 
@@ -80,7 +80,7 @@ Your AI Agent
  │     ├── /youtube-transcriber ──> supergateway (:8089)│
  │     ├── /fetch ─────────────> supergateway (:8090)│
  │     ├── /git ────────────────> supergateway (:8091)│
- │     └── /video-doc ─────────> supergateway (:8092)│
+ │     └── /video2doc ─────────> supergateway (:8092)│
  │                                                    │
  └────────────────────────────────────────────────────┘
 ```
@@ -343,7 +343,7 @@ Every server is controlled by a single environment variable. Some servers need a
 | YouTube Transcriber | `ENABLE_YOUTUBE_TRANSCRIBER=true` | `TRANSCRIBER_API_KEY` + `TRANSCRIBER_PROVIDER` (see [YouTube Transcriber config](#youtube-transcriber-configuration)) |
 | Fetch | `ENABLE_FETCH=true` | -- |
 | Git | `ENABLE_GIT=true` | Requires `/workspace` to be a git repository |
-| Video Doc | `ENABLE_VIDEO_DOC=true` | `VISION_API_KEY` + `VISION_BASE_URL` + `VISION_MODEL` (see [Video Doc configuration](#video-doc-configuration)); shares `TRANSCRIBER_API_KEY` with YouTube Transcriber |
+| Video2Doc | `ENABLE_VIDEO2DOC=true` | `VISION_API_KEY` + `VISION_BASE_URL` + `VISION_MODEL` (see [Video2Doc configuration](#video2doc-configuration)); shares `TRANSCRIBER_API_KEY` with YouTube Transcriber |
 
 If you enable a server that requires an API key but don't provide one, the startup script will log a warning and skip that server. Nothing crashes.
 
@@ -422,9 +422,9 @@ The legacy `FIREWORKS_API_KEY` variable still works -- if set without any `TRANS
 - TRANSCRIBER_MODEL=whisper-large-v3
 ```
 
-### Video Doc configuration
+### Video2Doc configuration
 
-The Video Doc MCP downloads a video from a URL (or reads a local file), transcribes the audio, samples keyframes with scene-change detection, analyzes each frame with a vision model, and produces a structured markdown document with summary, action items, and embedded screenshots.
+The Video2Doc MCP downloads a video from a URL (or reads a local file), transcribes the audio, samples keyframes with scene-change detection, analyzes each frame with a vision model, and produces a structured markdown document with summary, action items, and embedded screenshots.
 
 **Input:** any URL supported by yt-dlp (Zoom cloud recordings, Loom shares, Google Drive, Vimeo, direct `.mp4` links, 500+ platforms), or a local file path under `/workspace`.
 
@@ -538,8 +538,8 @@ environment:
   # Web fetching and local git
   - ENABLE_FETCH=true
   - ENABLE_GIT=true
-  # Video Doc — set LLM_API_KEY + LLM_BASE_URL once, all tasks use that provider
-  - ENABLE_VIDEO_DOC=true
+  # Video2Doc — set LLM_API_KEY + LLM_BASE_URL once, all tasks use that provider
+  - ENABLE_VIDEO2DOC=true
   - LLM_API_KEY=your_api_key_here
   - LLM_BASE_URL=https://api.fireworks.ai/inference/v1
   - VISION_MODEL=accounts/fireworks/models/qwen2-vl-72b-instruct

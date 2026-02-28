@@ -45,7 +45,7 @@ RUN mkdir -p /workspace /data /var/log/mcp /var/run && \
 COPY gateway.js /app/gateway.js
 COPY python-interpreter.mjs /app/python-interpreter.mjs
 COPY youtube_summerizer.py /app/youtube_transcriber.py
-COPY video_doc_mcp.py /app/video_doc_mcp.py
+COPY video2doc_mcp.py /app/video2doc_mcp.py
 
 # Copy scripts
 COPY healthcheck.sh /healthcheck.sh

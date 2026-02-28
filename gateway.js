@@ -20,7 +20,7 @@ const MCP_REGISTRY = {
   'youtube-transcriber': { port: 8089, envVar: 'ENABLE_YOUTUBE_TRANSCRIBER' },
   'fetch':               { port: 8090, envVar: 'ENABLE_FETCH' },
   'git':                 { port: 8091, envVar: 'ENABLE_GIT' },
-  'video-doc':           { port: 8092, envVar: 'ENABLE_VIDEO_DOC' },
+  'video2doc':           { port: 8092, envVar: 'ENABLE_VIDEO2DOC' },
 };
 
 // Determine active MCPs from environment variables

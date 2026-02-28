@@ -191,9 +191,9 @@ if [ "${ENABLE_YOUTUBE_TRANSCRIBER}" = "true" ]; then
 fi
 
 # ── Video Doc MCP ─────────────────────────────────────────────────────────────
-if [ "${ENABLE_VIDEO_DOC}" = "true" ]; then
-    start_mcp "video-doc" 8092 \
-        "python3 /app/video_doc_mcp.py"
+if [ "${ENABLE_VIDEO2DOC}" = "true" ]; then
+    start_mcp "video2doc" 8092 \
+        "python3 /app/video2doc_mcp.py"
     STARTED=$((STARTED + 1))
 fi
 

@@ -15,6 +15,12 @@ services:
       # If not set, the gateway runs open with no auth.
       # - GATEWAY_API_KEY=your_secret_key_here
       #
+      # ─── LLM provider (shared by YouTube Transcriber + Video2Doc) ───
+      # Set once here; all AI-powered MCPs use this provider by default.
+      # See README for per-service overrides (different providers per task).
+      # - LLM_API_KEY=your_api_key_here
+      # - LLM_BASE_URL=https://api.fireworks.ai/inference/v1
+      #
       # ─── Core servers ───
       - ENABLE_PLAYWRIGHT=true
       - ENABLE_FILESYSTEM=true
@@ -30,36 +36,22 @@ services:
       # ─── Documentation lookup ───
       # - ENABLE_CONTEXT7=true
       # - CONTEXT7_API_KEY=your_key_here
-      # ─── YouTube transcription ───
-      # Supports any Whisper-compatible API. Set TRANSCRIBER_PROVIDER for
-      # easy setup or use TRANSCRIBER_BASE_URL + TRANSCRIBER_MODEL for full control.
-      # Providers: openai, fireworks, groq  (or any OpenAI-compatible endpoint)
+      # ─── YouTube Transcriber ───
+      # Transcribes YouTube videos via a Whisper-compatible API.
+      # Uses LLM_API_KEY / LLM_BASE_URL above by default.
       # - ENABLE_YOUTUBE_TRANSCRIBER=true
-      # - TRANSCRIBER_PROVIDER=groq
-      # - TRANSCRIBER_API_KEY=your_api_key_here
-      # - TRANSCRIBER_BASE_URL=              # (optional) override the provider's API URL
-      # - TRANSCRIBER_MODEL=                 # (optional) override the default model
-      # Legacy (still works): FIREWORKS_API_KEY=your_key  (auto-selects fireworks provider)
+      # - TRANSCRIBER_MODEL=whisper-large-v3-turbo
       # ─── Web fetching and local git ───
       # - ENABLE_FETCH=true
       # - ENABLE_GIT=true
-      # ─── Video Doc MCP ───
-      # Processes video recordings (Zoom, Loom, Drive, direct mp4, local files)
-      # into summary docs with embedded screenshots. Requires a vision model.
-      # Uses OpenAI-compatible API — works with Fireworks AI, OpenAI, Ollama, etc.
-      # See README for full provider/model recommendations.
-      # - ENABLE_VIDEO_DOC=true
-      #
-      # Set ONE provider for all AI tasks (vision + summary + transcription):
-      # - LLM_API_KEY=your_api_key_here
-      # - LLM_BASE_URL=https://api.fireworks.ai/inference/v1
-      #
-      # Then pick your models (no separate API keys needed):
+      # ─── Video2Doc ───
+      # Converts video recordings (Zoom, Loom, Drive, mp4, local files) into
+      # structured markdown docs with screenshots. Uses LLM_API_KEY / LLM_BASE_URL.
+      # See README for full model recommendations per provider.
+      # - ENABLE_VIDEO2DOC=true
       # - VISION_MODEL=accounts/fireworks/models/qwen2-vl-72b-instruct
       # - SUMMARY_MODEL=accounts/fireworks/models/llama4-scout-instruct-basic
       # - TRANSCRIBER_MODEL=whisper-v3
-      #
-      # To use separate providers per task, see README (Advanced: per-service config)
     restart: unless-stopped
     networks:
       - Network-Bridge
