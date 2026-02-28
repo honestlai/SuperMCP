@@ -235,7 +235,7 @@ WATCHDOG_PID=$!
 
 # ── Start the gateway ─────────────────────────────────────────────────────────
 echo "Starting MCP Gateway on port 8080..."
-cd /app && node gateway.js &
+cd /app && node --no-deprecation gateway.js &
 GATEWAY_PID=$!
 
 # Graceful shutdown: kill all children on SIGTERM/SIGINT

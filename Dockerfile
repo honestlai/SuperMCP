@@ -32,7 +32,7 @@ RUN npm install -g \
 # Set up gateway application with dependencies
 RUN mkdir -p /app && \
     echo '{"name":"mcp-gateway","private":true}' > /app/package.json && \
-    cd /app && npm install express http-proxy-middleware @modelcontextprotocol/sdk zod
+    cd /app && npm install express http-proxy-middleware@^3 @modelcontextprotocol/sdk zod
 
 # Install Playwright browsers
 RUN npx playwright install --with-deps
