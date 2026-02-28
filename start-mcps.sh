@@ -179,9 +179,10 @@ fi
 
 # ── YouTube Transcriber MCP ──────────────────────────────────────────────────
 if [ "${ENABLE_YOUTUBE_TRANSCRIBER}" = "true" ]; then
-    if [ -z "${TRANSCRIBER_API_KEY}" ] && [ -z "${FIREWORKS_API_KEY}" ]; then
+    # Accept LLM_API_KEY as the unified key, plus legacy service-specific keys
+    if [ -z "${TRANSCRIBER_API_KEY}" ] && [ -z "${FIREWORKS_API_KEY}" ] && [ -z "${LLM_API_KEY}" ]; then
         echo "[!] WARNING: ENABLE_YOUTUBE_TRANSCRIBER=true but no API key is set."
-        echo "    Set TRANSCRIBER_API_KEY (and optionally TRANSCRIBER_PROVIDER) or legacy FIREWORKS_API_KEY."
+        echo "    Set LLM_API_KEY (unified), TRANSCRIBER_API_KEY, or legacy FIREWORKS_API_KEY."
         echo "    Skipping."
     else
         start_mcp "youtube-transcriber" 8089 \
@@ -190,7 +191,7 @@ if [ "${ENABLE_YOUTUBE_TRANSCRIBER}" = "true" ]; then
     fi
 fi
 
-# ── Video Doc MCP ─────────────────────────────────────────────────────────────
+# ── Video2Doc MCP ─────────────────────────────────────────────────────────────
 if [ "${ENABLE_VIDEO2DOC}" = "true" ]; then
     start_mcp "video2doc" 8092 \
         "python3 /app/video2doc_mcp.py"
