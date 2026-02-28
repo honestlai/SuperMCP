@@ -6,39 +6,66 @@ from openai import OpenAI
 
 mcp = FastMCP("Video Doc MCP")
 
-# ── Vision config — any OpenAI-compatible endpoint ────────────────────────────
-# Used for: frame image analysis (MUST support vision/multimodal input).
-# Providers: Ollama (llava, qwen2-vl), Fireworks AI, OpenAI, Together AI, etc.
+# ── Unified provider config ────────────────────────────────────────────────────
+# Set LLM_API_KEY + LLM_BASE_URL to use a single provider for all AI tasks.
+# All service-specific vars (VISION_*, SUMMARY_*, TRANSCRIBER_*) take priority
+# when set, falling back to the unified vars, then to built-in defaults.
+#
+# Fallback chain for each setting:
+#   api_key:  VISION_API_KEY  → LLM_API_KEY → "ollama"
+#   base_url: VISION_BASE_URL → LLM_BASE_URL → "http://ollama:11434/v1"
+#
+# Same pattern applies to SUMMARY_* and TRANSCRIBER_*.
+# TRANSCRIBER_BASE_URL final default is Groq (fastest free Whisper endpoint).
+
+def _key(service_var: str) -> str:
+    return (os.getenv(service_var) or
+            os.getenv("LLM_API_KEY") or
+            "ollama")
+
+def _url(service_var: str, fallback: str = "http://ollama:11434/v1") -> str:
+    return (os.getenv(service_var) or
+            os.getenv("LLM_BASE_URL") or
+            fallback)
+
+
+# ── Vision — must support image/multimodal input ──────────────────────────────
 def get_vision_client() -> OpenAI:
-    return OpenAI(
-        api_key=os.getenv("VISION_API_KEY", "ollama"),
-        base_url=os.getenv("VISION_BASE_URL", "http://ollama:11434/v1"),
-    )
+    return OpenAI(api_key=_key("VISION_API_KEY"), base_url=_url("VISION_BASE_URL"))
 
 def vision_model() -> str:
     return os.getenv("VISION_MODEL", "llava")
 
-# ── Summary config — any OpenAI-compatible endpoint ──────────────────────────
-# Used for: text-only transcript summarization (no vision required).
-# Defaults to the same endpoint/model as Vision if SUMMARY_* vars are not set.
-# Set these to use a cheaper text-only model just for summarization.
+
+# ── Summary — text-only, can use a cheaper model than vision ──────────────────
 def get_summary_client() -> OpenAI:
-    return OpenAI(
-        api_key=os.getenv("SUMMARY_API_KEY") or os.getenv("VISION_API_KEY", "ollama"),
-        base_url=os.getenv("SUMMARY_BASE_URL") or os.getenv("VISION_BASE_URL", "http://ollama:11434/v1"),
-    )
+    api_key = (os.getenv("SUMMARY_API_KEY") or
+               os.getenv("VISION_API_KEY") or
+               os.getenv("LLM_API_KEY") or
+               "ollama")
+    base_url = (os.getenv("SUMMARY_BASE_URL") or
+                os.getenv("VISION_BASE_URL") or
+                os.getenv("LLM_BASE_URL") or
+                "http://ollama:11434/v1")
+    return OpenAI(api_key=api_key, base_url=base_url)
 
 def summary_model() -> str:
     return os.getenv("SUMMARY_MODEL") or os.getenv("VISION_MODEL", "llava")
 
-# ── Transcription config — any Whisper-compatible endpoint ────────────────────
-# Used for: audio -> text transcription via /audio/transcriptions endpoint.
-# Shared with the YouTube Transcriber MCP (same env vars).
+
+# ── Transcription — Whisper-compatible /audio/transcriptions endpoint ─────────
+# Shared env vars with YouTube Transcriber MCP.
+# Default falls back to Groq if no unified or service-specific URL is set,
+# since Groq offers the fastest free Whisper endpoint.
 def get_transcription_client() -> OpenAI:
-    return OpenAI(
-        api_key=os.getenv("TRANSCRIBER_API_KEY") or os.getenv("FIREWORKS_API_KEY", ""),
-        base_url=os.getenv("TRANSCRIBER_BASE_URL", "https://api.groq.com/openai/v1"),
-    )
+    api_key = (os.getenv("TRANSCRIBER_API_KEY") or
+               os.getenv("FIREWORKS_API_KEY") or
+               os.getenv("LLM_API_KEY") or
+               "")
+    base_url = (os.getenv("TRANSCRIBER_BASE_URL") or
+                os.getenv("LLM_BASE_URL") or
+                "https://api.groq.com/openai/v1")
+    return OpenAI(api_key=api_key, base_url=base_url)
 
 def transcription_model() -> str:
     return os.getenv("TRANSCRIBER_MODEL", "whisper-large-v3-turbo")
@@ -307,20 +334,31 @@ async def process_video(
 @mcp.tool()
 def video_doc_config() -> dict:
     """Show current video-doc-mcp configuration and active provider settings."""
+    unified_key = os.getenv("LLM_API_KEY")
+    unified_url = os.getenv("LLM_BASE_URL")
     return {
+        "unified_provider": {
+            "LLM_API_KEY": "set" if unified_key else "not set",
+            "LLM_BASE_URL": unified_url or "not set (service-specific defaults apply)",
+        },
         "vision": {
-            "base_url": os.getenv("VISION_BASE_URL", "http://ollama:11434/v1"),
-            "model": os.getenv("VISION_MODEL", "llava"),
+            "base_url": _url("VISION_BASE_URL"),
+            "model": vision_model(),
             "note": "Must support image input (multimodal/vision model required)",
         },
         "summary": {
-            "base_url": os.getenv("SUMMARY_BASE_URL") or os.getenv("VISION_BASE_URL", "http://ollama:11434/v1"),
-            "model": os.getenv("SUMMARY_MODEL") or os.getenv("VISION_MODEL", "llava"),
-            "note": "Text-only; set SUMMARY_* to use a cheaper model than the vision model",
+            "base_url": (os.getenv("SUMMARY_BASE_URL") or
+                         os.getenv("VISION_BASE_URL") or
+                         unified_url or
+                         "http://ollama:11434/v1"),
+            "model": summary_model(),
+            "note": "Text-only; optionally override with SUMMARY_* for a cheaper model",
         },
         "transcription": {
-            "base_url": os.getenv("TRANSCRIBER_BASE_URL", "https://api.groq.com/openai/v1"),
-            "model": os.getenv("TRANSCRIBER_MODEL", "whisper-large-v3-turbo"),
+            "base_url": (os.getenv("TRANSCRIBER_BASE_URL") or
+                         unified_url or
+                         "https://api.groq.com/openai/v1"),
+            "model": transcription_model(),
             "note": "Whisper-compatible /audio/transcriptions endpoint",
         },
         "output": "/workspace/outputs/",

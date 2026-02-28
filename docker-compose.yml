@@ -46,29 +46,20 @@ services:
       # ─── Video Doc MCP ───
       # Processes video recordings (Zoom, Loom, Drive, direct mp4, local files)
       # into summary docs with embedded screenshots. Requires a vision model.
-      # All model endpoints use the OpenAI-compatible API — swap providers freely.
-      # See README for full model recommendations per provider.
+      # Uses OpenAI-compatible API — works with Fireworks AI, OpenAI, Ollama, etc.
+      # See README for full provider/model recommendations.
       # - ENABLE_VIDEO_DOC=true
       #
-      # -- Vision model (MUST support image/multimodal input) --
-      # Ollama (local):   VISION_BASE_URL=http://ollama:11434/v1  VISION_MODEL=qwen2-vl:7b
-      # Fireworks AI:     VISION_BASE_URL=https://api.fireworks.ai/inference/v1  VISION_MODEL=accounts/fireworks/models/qwen2-vl-72b-instruct
-      # OpenAI:           VISION_BASE_URL=https://api.openai.com/v1  VISION_MODEL=gpt-4o
-      # Together AI:      VISION_BASE_URL=https://api.together.xyz/v1  VISION_MODEL=Qwen/Qwen2-VL-72B-Instruct
-      # - VISION_API_KEY=your_key_here
-      # - VISION_BASE_URL=https://api.fireworks.ai/inference/v1
+      # Set ONE provider for all AI tasks (vision + summary + transcription):
+      # - LLM_API_KEY=your_api_key_here
+      # - LLM_BASE_URL=https://api.fireworks.ai/inference/v1
+      #
+      # Then pick your models (no separate API keys needed):
       # - VISION_MODEL=accounts/fireworks/models/qwen2-vl-72b-instruct
-      #
-      # -- Summary model (text-only, optional — defaults to VISION_* if not set) --
-      # Set these to use a cheaper text model for transcript summarization.
-      # Fireworks AI cheap: SUMMARY_MODEL=accounts/fireworks/models/llama4-scout-instruct-basic
-      # OpenAI cheap:       SUMMARY_MODEL=gpt-4o-mini
-      # - SUMMARY_API_KEY=your_key_here
-      # - SUMMARY_BASE_URL=https://api.fireworks.ai/inference/v1
       # - SUMMARY_MODEL=accounts/fireworks/models/llama4-scout-instruct-basic
+      # - TRANSCRIBER_MODEL=whisper-v3
       #
-      # -- Transcription (shared with YouTubeTranscriber, Whisper-compatible) --
-      # TRANSCRIBER_API_KEY / TRANSCRIBER_BASE_URL / TRANSCRIBER_MODEL
+      # To use separate providers per task, see README (Advanced: per-service config)
     restart: unless-stopped
     networks:
       - Network-Bridge
