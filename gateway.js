@@ -122,8 +122,8 @@ for (const [name, config] of Object.entries(activeMcps)) {
     // Rewrite /<mcpname> to /mcp (supergateway serves at /mcp)
     pathRewrite: { '^/': '/mcp' },
     // Timeout settings
-    proxyTimeout: 120000,
-    timeout: 120000,
+    proxyTimeout: 900000,
+    timeout: 900000,
     on: {
       proxyRes: (proxyRes, req, res) => {
         // Disable buffering for SSE / streaming responses

@@ -430,24 +430,97 @@ The Video Doc MCP downloads a video from a URL (or reads a local file), transcri
 
 **Output:** a markdown file written to `/workspace/outputs/`.
 
+Every model endpoint uses the standard OpenAI-compatible API — you can swap providers without any code changes.
+
 #### Environment variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `VISION_API_KEY` | **Yes** | API key for the vision model (use `ollama` for Ollama) |
-| `VISION_BASE_URL` | No | Base URL of the vision API (default: `http://ollama:11434/v1`) |
-| `VISION_MODEL` | No | Vision model name (default: `llava`) |
+| `VISION_BASE_URL` | No | Base URL of the OpenAI-compatible vision API (default: Ollama) |
+| `VISION_MODEL` | No | Vision model name — **must support image input** |
+| `SUMMARY_API_KEY` | No | API key for the summary model — defaults to `VISION_API_KEY` |
+| `SUMMARY_BASE_URL` | No | Base URL for the summary model — defaults to `VISION_BASE_URL` |
+| `SUMMARY_MODEL` | No | Text-only model for transcript summarization — defaults to `VISION_MODEL`. Set this to use a cheaper model for the summarization step. |
 | `TRANSCRIBER_API_KEY` | **Yes** | Shared with YouTube Transcriber — API key for Whisper transcription |
 | `TRANSCRIBER_BASE_URL` | No | Shared with YouTube Transcriber — transcription API base URL |
 | `TRANSCRIBER_MODEL` | No | Shared with YouTube Transcriber — Whisper model name |
 
-#### Vision model presets
+#### Vision model provider recommendations
 
-| Setup | `VISION_BASE_URL` | `VISION_MODEL` | Notes |
-|-------|------------------|----------------|-------|
-| **Ollama (local)** | `http://ollama:11434/v1` | `llava` or `moondream` | Free, runs locally |
-| **OpenAI** | `https://api.openai.com/v1` | `gpt-4o` | Best quality |
-| **OpenAI-compatible** | Any compat endpoint | Model name | Works with any OpenAI-compatible vision API |
+The vision model analyzes each sampled video frame. It must support image input. The summary model only reads text (the transcript), so a cheaper text-only model can be used there to cut costs.
+
+| Provider | Tier | Vision model | Summary model | Transcription |
+|----------|------|-------------|---------------|---------------|
+| **Fireworks AI** | Best quality | `accounts/fireworks/models/qwen2-vl-72b-instruct` | `accounts/fireworks/models/llama4-maverick-instruct-basic` | `whisper-v3` |
+| **Fireworks AI** | Cost-effective | `accounts/fireworks/models/qwen2-vl-7b-instruct` | `accounts/fireworks/models/llama4-scout-instruct-basic` | `whisper-v3` |
+| **OpenAI** | Best quality | `gpt-4o` | `gpt-4o` | `whisper-1` |
+| **OpenAI** | Cost-effective | `gpt-4o-mini` | `gpt-4o-mini` | `whisper-1` |
+| **Together AI** | Best quality | `Qwen/Qwen2-VL-72B-Instruct` | `meta-llama/Llama-3.3-70B-Instruct-Turbo` | — |
+| **Together AI** | Cost-effective | `Qwen/Qwen2-VL-7B-Instruct` | `meta-llama/Llama-3.1-8B-Instruct-Turbo` | — |
+| **Ollama (local)** | Best quality | `qwen2-vl:32b` | `qwen3:14b` | — |
+| **Ollama (local)** | Cost-effective | `qwen2-vl:7b` | `qwen3:4b` | — |
+
+> **Cost tip:** The vision model is called once per extracted frame (up to `max_frames`). The summary model is called once per video. Setting `SUMMARY_MODEL` to a cheap/fast text model (e.g. Llama 4 Scout on Fireworks, `gpt-4o-mini`) significantly reduces cost on longer videos with many frames.
+
+> **Transcription:** Groq (`whisper-large-v3-turbo`, the default) is the fastest and cheapest option. OpenAI `whisper-1` and Fireworks `whisper-v3` are solid alternatives.
+
+#### Provider config examples
+
+**Fireworks AI — best quality**
+```yaml
+- VISION_API_KEY=fw_your_key_here
+- VISION_BASE_URL=https://api.fireworks.ai/inference/v1
+- VISION_MODEL=accounts/fireworks/models/qwen2-vl-72b-instruct
+- SUMMARY_MODEL=accounts/fireworks/models/llama4-maverick-instruct-basic
+- TRANSCRIBER_API_KEY=fw_your_key_here
+- TRANSCRIBER_BASE_URL=https://api.fireworks.ai/inference/v1
+- TRANSCRIBER_MODEL=whisper-v3
+```
+
+**Fireworks AI — cost-effective**
+```yaml
+- VISION_API_KEY=fw_your_key_here
+- VISION_BASE_URL=https://api.fireworks.ai/inference/v1
+- VISION_MODEL=accounts/fireworks/models/qwen2-vl-7b-instruct
+- SUMMARY_MODEL=accounts/fireworks/models/llama4-scout-instruct-basic
+- TRANSCRIBER_API_KEY=gsk_your_groq_key        # Groq is cheapest for transcription
+- TRANSCRIBER_BASE_URL=https://api.groq.com/openai/v1
+- TRANSCRIBER_MODEL=whisper-large-v3-turbo
+```
+
+**OpenAI — best quality**
+```yaml
+- VISION_API_KEY=sk-your_openai_key
+- VISION_BASE_URL=https://api.openai.com/v1
+- VISION_MODEL=gpt-4o
+- SUMMARY_MODEL=gpt-4o-mini                    # cheaper for text-only summary step
+- TRANSCRIBER_API_KEY=sk-your_openai_key
+- TRANSCRIBER_BASE_URL=https://api.openai.com/v1
+- TRANSCRIBER_MODEL=whisper-1
+```
+
+**Together AI**
+```yaml
+- VISION_API_KEY=your_together_key
+- VISION_BASE_URL=https://api.together.xyz/v1
+- VISION_MODEL=Qwen/Qwen2-VL-72B-Instruct
+- SUMMARY_MODEL=meta-llama/Llama-3.3-70B-Instruct-Turbo
+- TRANSCRIBER_API_KEY=gsk_your_groq_key        # Together has no Whisper endpoint
+- TRANSCRIBER_BASE_URL=https://api.groq.com/openai/v1
+- TRANSCRIBER_MODEL=whisper-large-v3-turbo
+```
+
+**Ollama (self-hosted)**
+```yaml
+- VISION_API_KEY=ollama
+- VISION_BASE_URL=http://ollama:11434/v1
+- VISION_MODEL=qwen2-vl:7b
+- SUMMARY_MODEL=qwen3:4b
+- TRANSCRIBER_API_KEY=gsk_your_groq_key        # Ollama has no Whisper endpoint
+- TRANSCRIBER_BASE_URL=https://api.groq.com/openai/v1
+- TRANSCRIBER_MODEL=whisper-large-v3-turbo
+```
 
 #### Example usage (after enabling)
 
@@ -500,11 +573,13 @@ environment:
   # Web fetching and local git
   - ENABLE_FETCH=true
   - ENABLE_GIT=true
-  # Video Doc (vision model required — swap for OpenAI if no Ollama)
+  # Video Doc — swap VISION_* to use Fireworks AI, OpenAI, Together AI, or Ollama
   - ENABLE_VIDEO_DOC=true
-  - VISION_BASE_URL=http://ollama:11434/v1
-  - VISION_MODEL=llava
-  - VISION_API_KEY=ollama
+  - VISION_API_KEY=fw_your_key_here
+  - VISION_BASE_URL=https://api.fireworks.ai/inference/v1
+  - VISION_MODEL=accounts/fireworks/models/qwen2-vl-72b-instruct
+  # Optional: cheaper text-only model for the summarization step
+  - SUMMARY_MODEL=accounts/fireworks/models/llama4-scout-instruct-basic
 ```
 
 ### Volumes

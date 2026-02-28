@@ -1,4 +1,4 @@
-import os, re, base64, subprocess, tempfile
+import asyncio, os, re, base64, subprocess, tempfile
 from pathlib import Path
 from typing import Optional
 from mcp.server.fastmcp import FastMCP
@@ -6,28 +6,48 @@ from openai import OpenAI
 
 mcp = FastMCP("Video Doc MCP")
 
-# ── Vision config (OpenAI SDK — works with OpenAI, Ollama, any compat endpoint) ──
-def get_vision_client():
+# ── Vision config — any OpenAI-compatible endpoint ────────────────────────────
+# Used for: frame image analysis (MUST support vision/multimodal input).
+# Providers: Ollama (llava, qwen2-vl), Fireworks AI, OpenAI, Together AI, etc.
+def get_vision_client() -> OpenAI:
     return OpenAI(
         api_key=os.getenv("VISION_API_KEY", "ollama"),
         base_url=os.getenv("VISION_BASE_URL", "http://ollama:11434/v1"),
     )
 
-VISION_MODEL = lambda: os.getenv("VISION_MODEL", "llava")
+def vision_model() -> str:
+    return os.getenv("VISION_MODEL", "llava")
 
-# ── Transcription config (reuse existing youtube transcriber pattern) ──────────
-def get_transcription_client():
+# ── Summary config — any OpenAI-compatible endpoint ──────────────────────────
+# Used for: text-only transcript summarization (no vision required).
+# Defaults to the same endpoint/model as Vision if SUMMARY_* vars are not set.
+# Set these to use a cheaper text-only model just for summarization.
+def get_summary_client() -> OpenAI:
+    return OpenAI(
+        api_key=os.getenv("SUMMARY_API_KEY") or os.getenv("VISION_API_KEY", "ollama"),
+        base_url=os.getenv("SUMMARY_BASE_URL") or os.getenv("VISION_BASE_URL", "http://ollama:11434/v1"),
+    )
+
+def summary_model() -> str:
+    return os.getenv("SUMMARY_MODEL") or os.getenv("VISION_MODEL", "llava")
+
+# ── Transcription config — any Whisper-compatible endpoint ────────────────────
+# Used for: audio -> text transcription via /audio/transcriptions endpoint.
+# Shared with the YouTube Transcriber MCP (same env vars).
+def get_transcription_client() -> OpenAI:
     return OpenAI(
         api_key=os.getenv("TRANSCRIBER_API_KEY") or os.getenv("FIREWORKS_API_KEY", ""),
         base_url=os.getenv("TRANSCRIBER_BASE_URL", "https://api.groq.com/openai/v1"),
     )
 
-TRANSCRIPTION_MODEL = lambda: os.getenv("TRANSCRIBER_MODEL", "whisper-large-v3-turbo")
+def transcription_model() -> str:
+    return os.getenv("TRANSCRIBER_MODEL", "whisper-large-v3-turbo")
+
 
 DOC_TYPE_PROMPTS = {
     "meeting": "This is a frame from an internal meeting recording. Describe what's on screen (slides, whiteboard, screen share, chat). Note anything important: decisions, action items, diagrams. Rate importance 1-10 where 10=critical info visible.",
     "discovery": "This is a frame from a client discovery call. Describe what's visible and any requirements, pain points, or key client statements shown. Rate importance 1-10.",
-    "howto": "This is a frame from a tutorial/how-to recording. Describe the exact step being demonstrated, any UI, commands, or actions visible. Be precise — this becomes docs. Rate importance 1-10.",
+    "howto": "This is a frame from a tutorial/how-to recording. Describe the exact step being demonstrated, any UI, commands, or actions visible. Be precise -- this becomes docs. Rate importance 1-10.",
     "general": "Describe what's happening in this video frame. Note any text, diagrams, or important visuals. Rate importance 1-10.",
 }
 
@@ -40,21 +60,14 @@ SUMMARY_PROMPTS = {
 
 
 def resolve_video(source: str, tmp_dir: str) -> tuple[str, str]:
-    """
-    Accept a URL or local path. Returns (local_video_path, inferred_title).
-    URLs are downloaded via yt-dlp (handles Zoom, Loom, Drive, Vimeo, direct mp4, etc.)
-    """
     is_url = re.match(r"^https?://", source.strip())
-
     if is_url:
         out_path = os.path.join(tmp_dir, "video.%(ext)s")
-        # Grab the title before downloading
         title_result = subprocess.run(
             ["yt-dlp", "--print", "title", "--no-playlist", source],
             capture_output=True, text=True, timeout=30,
         )
         title = title_result.stdout.strip() or Path(source).stem
-
         subprocess.run(
             ["yt-dlp", "-o", out_path, "--no-playlist",
              "-f", "best[ext=mp4]/bestvideo[ext=mp4]+bestaudio/best",
@@ -65,7 +78,6 @@ def resolve_video(source: str, tmp_dir: str) -> tuple[str, str]:
         if not matches:
             raise FileNotFoundError(f"yt-dlp downloaded nothing for: {source}")
         return str(matches[0]), title
-
     else:
         if not os.path.exists(source):
             raise FileNotFoundError(f"Local file not found: {source}")
@@ -73,7 +85,7 @@ def resolve_video(source: str, tmp_dir: str) -> tuple[str, str]:
         return source, title
 
 
-def extract_audio(video_path: str, out_path: str):
+def extract_audio(video_path: str, out_path: str) -> None:
     subprocess.run(
         ["ffmpeg", "-i", video_path, "-vn", "-ar", "16000", "-ac", "1", "-f", "mp3", out_path, "-y"],
         check=True, capture_output=True,
@@ -81,7 +93,6 @@ def extract_audio(video_path: str, out_path: str):
 
 
 def extract_frames(video_path: str, out_dir: str, max_frames: int = 20) -> list[dict]:
-    """Extract keyframes via scene change detection, fall back to interval."""
     scene_pattern = os.path.join(out_dir, "frame_%06d.jpg")
     try:
         subprocess.run(
@@ -95,7 +106,6 @@ def extract_frames(video_path: str, out_dir: str, max_frames: int = 20) -> list[
 
     frames = sorted(Path(out_dir).glob("frame_*.jpg"))
 
-    # Fall back to interval if scene detection found nothing
     if len(frames) < 3:
         result = subprocess.run(
             ["ffprobe", "-v", "error", "-show_entries", "format=duration",
@@ -112,7 +122,6 @@ def extract_frames(video_path: str, out_dir: str, max_frames: int = 20) -> list[
         )
         frames = sorted(Path(out_dir).glob("frame_*.jpg"))
 
-    # Cap and space evenly if over max
     if len(frames) > max_frames:
         step = len(frames) // max_frames
         frames = frames[::step][:max_frames]
@@ -130,12 +139,11 @@ def extract_frames(video_path: str, out_dir: str, max_frames: int = 20) -> list[
 
 
 def analyze_frame(client: OpenAI, image_path: str, prompt: str) -> tuple[str, int]:
-    """Returns (description, importance_score 1-10)."""
     with open(image_path, "rb") as f:
         b64 = base64.b64encode(f.read()).decode()
     try:
         resp = client.chat.completions.create(
-            model=VISION_MODEL(),
+            model=vision_model(),
             messages=[{"role": "user", "content": [
                 {"type": "text", "text": prompt},
                 {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
@@ -155,65 +163,42 @@ def analyze_frame(client: OpenAI, image_path: str, prompt: str) -> tuple[str, in
 
 def build_markdown(title, doc_type, summary, action_items, transcript, frames_info) -> str:
     lines = [f"# {title}\n", f"**Type:** {doc_type}\n"]
-
     lines.append("## Summary\n")
     lines.append(summary.strip() + "\n")
-
     if action_items:
         label = {"meeting": "Action Items", "discovery": "Key Requirements",
                  "howto": "Steps", "general": "Key Points"}.get(doc_type, "Key Points")
         lines.append(f"\n## {label}\n")
         for i, item in enumerate(action_items, 1):
             lines.append(f"{i}. {item}\n")
-
     if frames_info:
         lines.append("\n## Screenshots\n")
         for f in frames_info:
             ts = f["timestamp"]
             mins, secs = divmod(int(ts), 60)
-            lines.append(f"\n### [{mins:02d}:{secs:02d}] — Importance: {f['score']}/10\n")
+            lines.append(f"\n### [{mins:02d}:{secs:02d}] -- Importance: {f['score']}/10\n")
             lines.append(f"![frame at {mins:02d}:{secs:02d}]({f['path']})\n")
             lines.append(f"\n{f['description']}\n")
-
     lines.append("\n## Full Transcript\n")
     lines.append("```\n" + transcript.strip() + "\n```\n")
-
     return "\n".join(lines)
 
 
-@mcp.tool()
-async def process_video(
+def _process_video_sync(
     video_source: str,
-    doc_type: str = "meeting",
-    title: Optional[str] = None,
-    max_frames: int = 20,
-    min_importance: int = 6,
+    doc_type: str,
+    title: Optional[str],
+    max_frames: int,
+    min_importance: int,
 ) -> str:
     """
-    Process a video recording into a summary document with embedded screenshots.
-
-    Args:
-        video_source:   A streamable URL *or* a local file path.
-                        URLs: Zoom cloud recording, Loom, Google Drive share link,
-                              Vimeo, direct .mp4 link, or any yt-dlp-supported platform.
-                        Local: /workspace/meeting.mp4 (mp4, mov, mkv, webm, avi)
-        doc_type:       "meeting" | "discovery" | "howto" | "general"
-        title:          Document title (auto-detected from URL/filename if omitted)
-        max_frames:     Max frames to analyze (default 20)
-        min_importance: Only include frames scoring >= this (default 6, range 1-10)
-
-    Returns:
-        Path to generated markdown file in /workspace/outputs/
+    Full synchronous processing pipeline.
+    Called via asyncio.to_thread so it never blocks the FastMCP event loop.
     """
-    doc_type = doc_type.lower()
-    if doc_type not in DOC_TYPE_PROMPTS:
-        doc_type = "general"
-
     out_dir = "/workspace/outputs"
     os.makedirs(out_dir, exist_ok=True)
 
     with tempfile.TemporaryDirectory() as tmp:
-        # 0. Resolve source → local file (download if URL)
         try:
             video_path, inferred_title = resolve_video(video_source, tmp)
         except Exception as e:
@@ -231,7 +216,7 @@ async def process_video(
             tclient = get_transcription_client()
             with open(audio_path, "rb") as af:
                 result = tclient.audio.transcriptions.create(
-                    model=TRANSCRIPTION_MODEL(), file=af, response_format="text"
+                    model=transcription_model(), file=af, response_format="text"
                 )
             transcript = str(result)
         except Exception as e:
@@ -249,12 +234,13 @@ async def process_video(
             if score >= min_importance:
                 analyzed.append({**frame, "description": desc, "score": score})
 
-        # 4. Summarize transcript
+        # 4. Summarize transcript with summary model (may be cheaper than vision model)
         summary, action_items = "", []
         try:
             summary_prompt = SUMMARY_PROMPTS[doc_type] + transcript[:8000]
-            resp = vclient.chat.completions.create(
-                model=VISION_MODEL(),
+            sclient = get_summary_client()
+            resp = sclient.chat.completions.create(
+                model=summary_model(),
                 messages=[{"role": "user", "content": summary_prompt}],
                 max_tokens=600,
             )
@@ -284,16 +270,62 @@ async def process_video(
 
 
 @mcp.tool()
+async def process_video(
+    video_source: str,
+    doc_type: str = "meeting",
+    title: Optional[str] = None,
+    max_frames: int = 20,
+    min_importance: int = 6,
+) -> str:
+    """
+    Process a video recording into a summary document with embedded screenshots.
+
+    Args:
+        video_source:   A streamable URL *or* a local file path.
+                        URLs: Zoom cloud recording, Loom, Google Drive share link,
+                              Vimeo, direct .mp4 link, or any yt-dlp-supported platform.
+                        Local: /workspace/meeting.mp4 (mp4, mov, mkv, webm, avi)
+        doc_type:       "meeting" | "discovery" | "howto" | "general"
+        title:          Document title (auto-detected from URL/filename if omitted)
+        max_frames:     Max frames to analyze with the vision model (default 20)
+        min_importance: Only include frames scoring >= this in the doc (default 6, range 1-10)
+
+    Returns:
+        Path to generated markdown file in /workspace/outputs/
+    """
+    doc_type = doc_type.lower()
+    if doc_type not in DOC_TYPE_PROMPTS:
+        doc_type = "general"
+
+    # Offload the entire pipeline to a thread so FastMCP's event loop is never
+    # blocked during yt-dlp download, ffmpeg processing, or model inference.
+    return await asyncio.to_thread(
+        _process_video_sync, video_source, doc_type, title, max_frames, min_importance
+    )
+
+
+@mcp.tool()
 def video_doc_config() -> dict:
-    """Show current video-doc-mcp configuration."""
+    """Show current video-doc-mcp configuration and active provider settings."""
     return {
-        "vision_base_url": os.getenv("VISION_BASE_URL", "http://ollama:11434/v1"),
-        "vision_model": os.getenv("VISION_MODEL", "llava"),
-        "transcription_model": os.getenv("TRANSCRIBER_MODEL", "whisper-large-v3-turbo"),
-        "video_input": "URL (Zoom, Loom, Drive, direct mp4, etc.) or /workspace local path",
-        "doc_output": "/workspace/outputs/",
+        "vision": {
+            "base_url": os.getenv("VISION_BASE_URL", "http://ollama:11434/v1"),
+            "model": os.getenv("VISION_MODEL", "llava"),
+            "note": "Must support image input (multimodal/vision model required)",
+        },
+        "summary": {
+            "base_url": os.getenv("SUMMARY_BASE_URL") or os.getenv("VISION_BASE_URL", "http://ollama:11434/v1"),
+            "model": os.getenv("SUMMARY_MODEL") or os.getenv("VISION_MODEL", "llava"),
+            "note": "Text-only; set SUMMARY_* to use a cheaper model than the vision model",
+        },
+        "transcription": {
+            "base_url": os.getenv("TRANSCRIBER_BASE_URL", "https://api.groq.com/openai/v1"),
+            "model": os.getenv("TRANSCRIBER_MODEL", "whisper-large-v3-turbo"),
+            "note": "Whisper-compatible /audio/transcriptions endpoint",
+        },
+        "output": "/workspace/outputs/",
         "supported_doc_types": ["meeting", "discovery", "howto", "general"],
-        "url_support": "Any platform supported by yt-dlp (500+ sites)",
+        "video_input": "URL (yt-dlp: 500+ platforms) or /workspace local path",
     }
 
 
