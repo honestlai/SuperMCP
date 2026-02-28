@@ -36,12 +36,16 @@ def get_config():
     Priority:
       1. Explicit overrides:  TRANSCRIBER_BASE_URL / TRANSCRIBER_MODEL
       2. Provider preset:     TRANSCRIBER_PROVIDER  (openai | fireworks | groq)
-      3. Legacy fallback:     FIREWORKS_API_KEY  (auto-selects fireworks preset)
+      3. Unified fallback:    LLM_API_KEY / LLM_BASE_URL  (shared provider)
+      4. Legacy fallback:     FIREWORKS_API_KEY  (auto-selects fireworks preset)
 
-    At minimum, an API key must be set via TRANSCRIBER_API_KEY or FIREWORKS_API_KEY.
+    At minimum, an API key must be set via TRANSCRIBER_API_KEY, LLM_API_KEY,
+    or legacy FIREWORKS_API_KEY.
     """
     provider = os.environ.get("TRANSCRIBER_PROVIDER", "").lower().strip()
-    api_key = os.environ.get("TRANSCRIBER_API_KEY") or os.environ.get("FIREWORKS_API_KEY")
+    api_key = (os.environ.get("TRANSCRIBER_API_KEY") or
+               os.environ.get("FIREWORKS_API_KEY") or
+               os.environ.get("LLM_API_KEY"))
     base_url = os.environ.get("TRANSCRIBER_BASE_URL")
     model = os.environ.get("TRANSCRIBER_MODEL")
 
@@ -56,8 +60,8 @@ def get_config():
         base_url = base_url or preset["base_url"]
         model = model or preset["model"]
 
-    # Final defaults if nothing was set
-    base_url = base_url or "https://api.openai.com/v1"
+    # Fall back to unified LLM_BASE_URL if no service-specific URL was set
+    base_url = base_url or os.environ.get("LLM_BASE_URL") or "https://api.openai.com/v1"
     model = model or "whisper-1"
 
     return {
@@ -86,8 +90,8 @@ async def transcribe_youtube(url: str, language: Optional[str] = "en") -> str:
 
     if not config["api_key"]:
         return (
-            "Error: No API key found. Set TRANSCRIBER_API_KEY (or legacy FIREWORKS_API_KEY) "
-            "in your environment variables."
+            "Error: No API key found. Set LLM_API_KEY (unified), TRANSCRIBER_API_KEY, "
+            "or legacy FIREWORKS_API_KEY in your environment variables."
         )
 
     client = OpenAI(
